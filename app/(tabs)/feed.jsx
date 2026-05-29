@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  TextInput, SafeAreaView, ActivityIndicator
-} from 'react-native'
+import { View, Text, FlatList, StyleSheet, TouchableOpacity,
+  TextInput, ActivityIndicator } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { StatusBar } from 'expo-status-bar'
 
-const FILTERS = ['Todas', 'Animais', 'Plantas', 'Fungos']
+const FILTERS = ['Todos', 'Animais', 'Plantas', 'Fungos']
 
 const KINGDOM_MAP = {
   'Animais': 'animalia',
@@ -17,10 +17,11 @@ const KINGDOM_MAP = {
 
 export default function Feed() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [observations, setObservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState('Todas')
+  const [activeFilter, setActiveFilter] = useState('Todos')
 
   useEffect(() => {
     fetchObservations()
@@ -43,7 +44,7 @@ export default function Feed() {
       .eq('is_public', true)
       .order('observed_at', { ascending: false })
 
-    if (activeFilter !== 'Todas') {
+    if (activeFilter !== 'Todos') {
       query = query.eq('species.kingdom', KINGDOM_MAP[activeFilter])
     }
 
@@ -118,8 +119,9 @@ export default function Feed() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
+      <StatusBar style="dark" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>BioRegisto</Text>
         <Ionicons name="options-outline" size={24} color="#1a3c2e" />
@@ -165,11 +167,22 @@ export default function Feed() {
         />
       )}
 
+      {/* Logout temporário - remover depois */}
+      <TouchableOpacity 
+        style={styles.logoutBtn} 
+        onPress={async () => {
+        await supabase.auth.signOut()
+        router.replace('/(auth)/login')
+        }}
+      >
+      <Text style={{ color: '#fff', fontSize: 12 }}>Logout</Text>
+      </TouchableOpacity>
+
       {/* FAB — botão câmara */}
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/(tabs)/add')}>
         <Ionicons name="camera" size={26} color="#fff" />
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   )
 }
 
@@ -202,4 +215,5 @@ const styles = StyleSheet.create({
   statText: { fontSize: 13, color: '#666', marginLeft: 4 },
   empty: { textAlign: 'center', marginTop: 60, color: '#999', fontSize: 15 },
   fab: { position: 'absolute', bottom: 80, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', elevation: 5 },
+  logoutBtn: { position: 'absolute', top: 50, right: 16, backgroundColor: 'red', padding: 8, borderRadius: 8 },
 })

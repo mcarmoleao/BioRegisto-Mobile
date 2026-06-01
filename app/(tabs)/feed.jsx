@@ -1,6 +1,9 @@
+console.log('feed.jsx loaded')
 import { useEffect, useState } from 'react'
-import { View, Text, FlatList, StyleSheet, TouchableOpacity,
-  TextInput, ActivityIndicator } from 'react-native'
+import {
+  View, Text, FlatList, StyleSheet, TouchableOpacity,
+  TextInput, ActivityIndicator
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -8,12 +11,7 @@ import { supabase } from '../../lib/supabase'
 import { StatusBar } from 'expo-status-bar'
 
 const FILTERS = ['Todos', 'Animais', 'Plantas', 'Fungos']
-
-const KINGDOM_MAP = {
-  'Animais': 'animalia',
-  'Plantas': 'plantae',
-  'Fungos': 'fungi',
-}
+const KINGDOM_MAP = { 'Animais': 'animalia', 'Plantas': 'plantae', 'Fungos': 'fungi' }
 
 export default function Feed() {
   const router = useRouter()
@@ -24,12 +22,13 @@ export default function Feed() {
   const [activeFilter, setActiveFilter] = useState('Todos')
 
   useEffect(() => {
+    console.log('useEffect triggered, activeFilter:', activeFilter)
     fetchObservations()
-  }, [activeFilter])
+  }, [activeFilter])  
 
   async function fetchObservations() {
+    console.log('fetchObservations called')
     setLoading(true)
-
     let query = supabase
       .from('observations')
       .select(`
@@ -40,7 +39,7 @@ export default function Feed() {
         likes (user_id),
         comments (id)
       `)
-      .eq('status', 'validated')
+      .eq('status', 'VALIDATED')
       .eq('is_public', true)
       .order('observed_at', { ascending: false })
 
@@ -49,6 +48,8 @@ export default function Feed() {
     }
 
     const { data, error } = await query
+    console.log('data:', JSON.stringify(data))
+    console.log('error:', JSON.stringify(error))
     if (!error) setObservations(data)
     setLoading(false)
   }
@@ -72,15 +73,9 @@ export default function Feed() {
 
     return (
       <TouchableOpacity style={styles.card} activeOpacity={0.9}>
-        {primaryPhoto ? (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="image-outline" size={48} color="#ccc" />
-          </View>
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="leaf-outline" size={48} color="#ccc" />
-          </View>
-        )}
+        <View style={styles.imagePlaceholder}>
+          <Ionicons name={primaryPhoto ? 'image-outline' : 'leaf-outline'} size={48} color="#ccc" />
+        </View>
         <View style={styles.cardBadge}>
           <Ionicons name="checkmark-circle" size={14} color="#fff" />
           <Text style={styles.cardBadgeText}>Validada</Text>
@@ -120,39 +115,22 @@ export default function Feed() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>BioRegisto</Text>
         <Ionicons name="options-outline" size={24} color="#1a3c2e" />
       </View>
-
-      {/* Search */}
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={18} color="#999" style={{ marginRight: 8 }} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Pesquisar espécies ou local..."
-          value={search}
-          onChangeText={setSearch}
-          placeholderTextColor="#999"
-        />
+        <TextInput style={styles.searchInput} placeholder="Pesquisar espécies ou local..." value={search} onChangeText={setSearch} placeholderTextColor="#999" />
       </View>
-
-      {/* Filters */}
       <View style={styles.filters}>
         {FILTERS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterBtn, activeFilter === f && styles.filterBtnActive]}
-            onPress={() => setActiveFilter(f)}
-          >
+          <TouchableOpacity key={f} style={[styles.filterBtn, activeFilter === f && styles.filterBtnActive]} onPress={() => setActiveFilter(f)}>
             <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
           </TouchableOpacity>
         ))}
       </View>
-
-      {/* List */}
       {loading ? (
         <ActivityIndicator size="large" color="#1a3c2e" style={{ marginTop: 40 }} />
       ) : (
@@ -161,24 +139,12 @@ export default function Feed() {
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 100 }}
-          ListEmptyComponent={
-            <Text style={styles.empty}>Nenhuma observação encontrada.</Text>
-          }
+          ListEmptyComponent={<Text style={styles.empty}>Nenhuma observação encontrada.</Text>}
         />
       )}
-
-      {/* Logout temporário - remover depois */}
-      <TouchableOpacity 
-        style={styles.logoutBtn} 
-        onPress={async () => {
-        await supabase.auth.signOut()
-        router.replace('/(auth)/login')
-        }}
-      >
-      <Text style={{ color: '#fff', fontSize: 12 }}>Logout</Text>
+      <TouchableOpacity style={styles.logoutBtn} onPress={async () => { await supabase.auth.signOut(); router.replace('/(auth)/login') }}>
+        <Text style={{ color: '#fff', fontSize: 12 }}>Logout</Text>
       </TouchableOpacity>
-
-      {/* FAB — botão câmara */}
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/(tabs)/add')}>
         <Ionicons name="camera" size={26} color="#fff" />
       </TouchableOpacity>

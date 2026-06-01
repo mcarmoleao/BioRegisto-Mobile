@@ -1,4 +1,3 @@
-console.log('feed.jsx loaded')
 import { useEffect, useState } from 'react'
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
@@ -22,12 +21,10 @@ export default function Feed() {
   const [activeFilter, setActiveFilter] = useState('Todos')
 
   useEffect(() => {
-    console.log('useEffect triggered, activeFilter:', activeFilter)
     fetchObservations()
   }, [activeFilter])  
 
   async function fetchObservations() {
-    console.log('fetchObservations called')
     setLoading(true)
     let query = supabase
       .from('observations')
@@ -48,8 +45,6 @@ export default function Feed() {
     }
 
     const { data, error } = await query
-    console.log('data:', JSON.stringify(data))
-    console.log('error:', JSON.stringify(error))
     if (!error) setObservations(data)
     setLoading(false)
   }

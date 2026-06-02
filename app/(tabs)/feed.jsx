@@ -99,8 +99,6 @@ export default function Feed() {
             <View style={styles.stats}>
               <Ionicons name="heart-outline" size={16} color="#666" />
               <Text style={styles.statText}>{item.likes?.length || 0}</Text>
-              <Ionicons name="chatbubble-outline" size={16} color="#666" style={{ marginLeft: 10 }} />
-              <Text style={styles.statText}>{item.comments?.length || 0}</Text>
             </View>
           </View>
         </View>
@@ -113,7 +111,6 @@ export default function Feed() {
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>BioRegisto</Text>
-        <Ionicons name="options-outline" size={24} color="#1a3c2e" />
       </View>
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={18} color="#999" style={{ marginRight: 8 }} />
@@ -137,10 +134,7 @@ export default function Feed() {
           ListEmptyComponent={<Text style={styles.empty}>Nenhuma observação encontrada.</Text>}
         />
       )}
-      <TouchableOpacity style={styles.logoutBtn} onPress={async () => { await supabase.auth.signOut(); router.replace('/(auth)/login') }}>
-        <Text style={{ color: '#fff', fontSize: 12 }}>Logout</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(tabs)/add')}>
+      <TouchableOpacity style={styles.cam} onPress={() => router.push('/(tabs)/add')}>
         <Ionicons name="camera" size={26} color="#fff" />
       </TouchableOpacity>
     </View>
@@ -151,7 +145,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1a3c2e' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 10, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#eee' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 15, borderRadius: 35, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#eee' },
   searchInput: { flex: 1, fontSize: 14, color: '#333' },
   filters: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 10 },
   filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff' },
@@ -175,6 +169,5 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', alignItems: 'center' },
   statText: { fontSize: 13, color: '#666', marginLeft: 4 },
   empty: { textAlign: 'center', marginTop: 60, color: '#999', fontSize: 15 },
-  fab: { position: 'absolute', bottom: 80, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', elevation: 5 },
-  logoutBtn: { position: 'absolute', top: 50, right: 16, backgroundColor: 'red', padding: 8, borderRadius: 8 },
+  cam: { position: 'absolute', bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', elevation: 5 },
 })

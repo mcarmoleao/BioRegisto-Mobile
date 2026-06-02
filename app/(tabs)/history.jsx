@@ -7,9 +7,9 @@ import { supabase } from '../../lib/supabase'
 const TABS = ['Todas', 'Validadas', 'Pendentes', 'Rejeitadas']
 const STATUS_MAP = { 'Validadas': 'VALIDATED', 'Pendentes': 'PENDING', 'Rejeitadas': 'REJECTED' }
 const STATUS_CONFIG = {
-  VALIDATED: { label: 'Validada', color: '#1a3c2e', bg: '#e8f5e9', icon: 'checkmark-circle' },
-  PENDING: { label: 'Pendente', color: '#b45309', bg: '#fef3c7', icon: 'time' },
-  REJECTED: { label: 'Rejeitada', color: '#dc2626', bg: '#fee2e2', icon: 'close-circle' },
+  VALIDATED: { label: 'VALIDADA', color: '#1a3c2e', bg: '#e8f5e9', icon: 'checkmark-circle' },
+  PENDING: { label: 'PENDENTE', color: '#a64d0a', bg: '#fef7da', icon: 'time' },
+  REJECTED: { label: 'REJEITADA', color: '#c41515', bg: '#fee2e2', icon: 'close-circle' },
 }
 
 export default function History() {
@@ -93,7 +93,6 @@ export default function History() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>As minhas observações</Text>
-        <Ionicons name="options-outline" size={24} color="#1a3c2e" />
       </View>
 
       <View style={styles.tabsContainer}>
@@ -139,11 +138,11 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#1a3c2e', borderColor: '#1a3c2e' },
   tabText: { fontSize: 13, color: '#555' },
   tabTextActive: { color: '#fff', fontWeight: '600' },
-  totalText: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 13, color: '#888' },
+  totalText: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 13, fontWeight: 'bold', color: '#605f5f' },
   card: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, marginBottom: 10, overflow: 'hidden', elevation: 1 },
-  photoContainer: { width: 90, height: 90 },
-  photo: { width: 90, height: 90 },
-  photoPlaceholder: { width: 90, height: 90, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  photoContainer: { width: 90, height: 100 },
+  photo: { width: 90, height: 100 },
+  photoPlaceholder: { width: 90, height: 100, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
   cardContent: { flex: 1, padding: 10, justifyContent: 'center' },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
   speciesName: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
@@ -151,7 +150,7 @@ const styles = StyleSheet.create({
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20, gap: 3, marginLeft: 6 },
   statusText: { fontSize: 11, fontWeight: '600' },
   timeText: { fontSize: 11, color: '#999', marginBottom: 4 },
-  rejectionText: { fontSize: 11, color: '#dc2626', fontStyle: 'italic', marginTop: 2 },
+  rejectionText: { fontSize: 11, color: '#c41515', fontStyle: 'italic', marginTop: 2 },
   empty: { alignItems: 'center', marginTop: 60, gap: 12 },
   emptyText: { color: '#999', fontSize: 15 },
 })

@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ActivityIndi
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'expo-router'
 
 const TABS = ['Todas', 'Validadas', 'Pendentes', 'Rejeitadas']
 const STATUS_MAP = { 'Validadas': 'VALIDATED', 'Pendentes': 'PENDING', 'Rejeitadas': 'REJECTED' }
@@ -14,6 +15,7 @@ const STATUS_CONFIG = {
 
 export default function History() {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const [observations, setObservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('Todas')
@@ -28,7 +30,7 @@ export default function History() {
     let query = supabase
       .from('observations')
       .select(`
-        id, description, observed_at, suggested_species, status, technician_notes,
+        id, description, observed_at, suggested_species, status,
         species:species_id (scientific_name, common_name_pt),
         photos (url, is_primary)
       `)
@@ -59,7 +61,11 @@ export default function History() {
     const status = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING
 
     return (
-      <TouchableOpacity style={styles.card} activeOpacity={0.85}>
+        <TouchableOpacity 
+          style={styles.card} 
+          activeOpacity={0.85}
+          onPress={() => router.push(`/observation/${item.id}`)}
+        >
         <View style={styles.photoContainer}>
           {photo ? (
             <Image source={{ uri: photo.url }} style={styles.photo} />
@@ -81,9 +87,6 @@ export default function History() {
             </View>
           </View>
           <Text style={styles.timeText}>{timeAgo(item.observed_at)}</Text>
-          {item.status === 'REJECTED' && item.technician_notes && (
-            <Text style={styles.rejectionText}>{item.technician_notes}</Text>
-          )}
         </View>
       </TouchableOpacity>
     )

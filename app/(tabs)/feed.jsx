@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
+  View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert,
   TextInput, ActivityIndicator
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { StatusBar } from 'expo-status-bar'
 
 const FILTERS = ['Todos', 'Animais', 'Plantas', 'Fungos']
-const KINGDOM_MAP = { 'Animais': 'animalia', 'Plantas': 'plantae', 'Fungos': 'fungi' }
+const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FUNGI' }
 
 export default function Feed() {
   const router = useRouter()
@@ -19,17 +19,31 @@ export default function Feed() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('Todos')
+  const [currentUserId, setCurrentUserId] = useState(null)
+  const [activeCommentId, setActiveCommentId] = useState(null)
+  const [commentText, setCommentText] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [likeLoadingIds, setLikeLoadingIds] = useState([])
 
   useEffect(() => {
     fetchObservations()
   }, [activeFilter])  
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchObservations()
+    }, [activeFilter])
+  )
+
   async function fetchObservations() {
     setLoading(true)
+    const { data: authData } = await supabase.auth.getUser()
+    setCurrentUserId(authData?.user?.id || null)
+
     let query = supabase
       .from('observations')
       .select(`
-        id, description, observed_at, suggested_species,
+        id, description, observed_at, suggested_species, status, is_public,
         species:species_id (scientific_name, common_name_pt, kingdom),
         user:user_id (username, avatar_url),
         photos (url, is_primary),
@@ -45,8 +59,75 @@ export default function Feed() {
     }
 
     const { data, error } = await query
-    if (!error) setObservations(data)
+    if (!error) {
+      // Safety guard to ensure feed only shows public validated observations.
+      const visible = (data || []).filter(obs => obs.status === 'VALIDATED' && obs.is_public === true)
+      setObservations(visible)
+    }
     setLoading(false)
+  }
+
+  async function toggleLike(observation) {
+    if (!currentUserId || likeLoadingIds.includes(observation.id)) return
+
+    const alreadyLiked = observation.likes?.some(like => like.user_id === currentUserId)
+    let previousLikes = observation.likes || []
+
+    setLikeLoadingIds(prev => [...prev, observation.id])
+    setObservations(prev => prev.map(obs => {
+      if (obs.id !== observation.id) return obs
+
+      const currentLikes = obs.likes || []
+      previousLikes = currentLikes
+      const nextLikes = alreadyLiked
+        ? currentLikes.filter(like => like.user_id !== currentUserId)
+        : [...currentLikes, { user_id: currentUserId }]
+
+      return { ...obs, likes: nextLikes }
+    }))
+
+    const query = alreadyLiked
+      ? supabase
+        .from('likes')
+        .delete()
+        .eq('observation_id', observation.id)
+        .eq('user_id', currentUserId)
+      : supabase
+        .from('likes')
+        .insert({ observation_id: observation.id, user_id: currentUserId })
+
+    const { error } = await query
+
+    if (error) {
+      // Roll back optimistic update if persistence fails.
+      setObservations(prev => prev.map(obs => (
+        obs.id === observation.id ? { ...obs, likes: previousLikes } : obs
+      )))
+      Alert.alert('Erro', 'Não foi possível atualizar o like.')
+    }
+
+    setLikeLoadingIds(prev => prev.filter(id => id !== observation.id))
+  }
+
+  async function submitComment(observationId) {
+    const content = commentText.trim()
+    if (!content || !currentUserId || actionLoading) return
+
+    setActionLoading(true)
+    const { error } = await supabase
+      .from('comments')
+      .insert({
+        observation_id: observationId,
+        user_id: currentUserId,
+        content,
+      })
+
+    if (!error) {
+      setCommentText('')
+      setActiveCommentId(null)
+      await fetchObservations()
+    }
+    setActionLoading(false)
   }
 
   const filtered = observations.filter(obs => {
@@ -65,11 +146,17 @@ export default function Feed() {
     const primaryPhoto = item.photos?.find(p => p.is_primary) || item.photos?.[0]
     const speciesName = item.species?.scientific_name || item.suggested_species || 'Espécie desconhecida'
     const commonName = item.species?.common_name_pt || ''
+    const likedByMe = item.likes?.some(like => like.user_id === currentUserId)
+    const isCommentOpen = activeCommentId === item.id
 
     return (
       <TouchableOpacity style={styles.card} activeOpacity={0.9}>
         <View style={styles.imagePlaceholder}>
-          <Ionicons name={primaryPhoto ? 'image-outline' : 'leaf-outline'} size={48} color="#ccc" />
+          {primaryPhoto?.url ? (
+            <Image source={{ uri: primaryPhoto.url }} style={styles.cardImage} />
+          ) : (
+            <Ionicons name="leaf-outline" size={48} color="#ccc" />
+          )}
         </View>
         <View style={styles.cardBadge}>
           <Ionicons name="checkmark-circle" size={14} color="#fff" />
@@ -96,11 +183,46 @@ export default function Feed() {
               </View>
               <Text style={styles.username}>@{item.user?.username || 'utilizador'}</Text>
             </View>
-            <View style={styles.stats}>
-              <Ionicons name="heart-outline" size={16} color="#666" />
-              <Text style={styles.statText}>{item.likes?.length || 0}</Text>
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item)} disabled={likeLoadingIds.includes(item.id)}>
+                <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={16} color={likedByMe ? '#dc2626' : '#666'} />
+                <Text style={styles.statText}>{item.likes?.length || 0}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  if (isCommentOpen) {
+                    setActiveCommentId(null)
+                    setCommentText('')
+                  } else {
+                    setActiveCommentId(item.id)
+                  }
+                }}
+              >
+                <Ionicons name="chatbubble-outline" size={16} color="#666" />
+                <Text style={styles.statText}>{item.comments?.length || 0}</Text>
+              </TouchableOpacity>
             </View>
           </View>
+
+          {isCommentOpen && (
+            <View style={styles.commentBox}>
+              <TextInput
+                style={styles.commentInput}
+                value={commentText}
+                onChangeText={setCommentText}
+                placeholder="Escreve um comentário..."
+                placeholderTextColor="#999"
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, (!commentText.trim() || actionLoading) && styles.sendBtnDisabled]}
+                onPress={() => submitComment(item.id)}
+                disabled={!commentText.trim() || actionLoading}
+              >
+                <Text style={styles.sendBtnText}>Enviar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     )
@@ -154,6 +276,7 @@ const styles = StyleSheet.create({
   filterTextActive: { color: '#fff' },
   card: { backgroundColor: '#fff', borderRadius: 12, marginHorizontal: 16, marginBottom: 16, overflow: 'hidden', elevation: 2 },
   imagePlaceholder: { height: 200, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  cardImage: { width: '100%', height: '100%' },
   cardBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a3c2e', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 4 },
   cardBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   cardBody: { padding: 12 },
@@ -166,8 +289,22 @@ const styles = StyleSheet.create({
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
   username: { fontSize: 13, color: '#555' },
-  stats: { flexDirection: 'row', alignItems: 'center' },
+  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 6,
+    borderRadius: 18,
+    justifyContent: 'center',
+  },
   statText: { fontSize: 13, color: '#666', marginLeft: 4 },
+  commentBox: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  commentInput: { flex: 1, borderWidth: 1, borderColor: '#e1e1e1', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: '#333' },
+  sendBtn: { backgroundColor: '#1a3c2e', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 },
+  sendBtnDisabled: { opacity: 0.5 },
+  sendBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   empty: { textAlign: 'center', marginTop: 60, color: '#999', fontSize: 15 },
   cam: { position: 'absolute', bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', elevation: 5 },
 })

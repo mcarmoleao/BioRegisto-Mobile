@@ -1,13 +1,14 @@
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MapView, { Marker } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'expo-router'
 
 const FILTERS = ['Todas', 'Animais', 'Plantas', 'Fungos']
-const KINGDOM_MAP = { 'Animais': 'animalia', 'Plantas': 'plantae', 'Fungos': 'fungi' }
+const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FUNGI' }
 
 const STATUS_COLORS = {
   VALIDATED: '#1a3c2e',
@@ -24,6 +25,7 @@ const STATUS_LABELS = {
 export default function Map() {
   const insets = useSafeAreaInsets()
   const mapRef = useRef(null)
+  const router = useRouter()
   const [observations, setObservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('Todas')
@@ -47,29 +49,28 @@ export default function Map() {
     const { data: { user } } = await supabase.auth.getUser()
 
     const { data, error } = await supabase
-      .from('observations')
-      .select(`
-        id, status, suggested_species, observed_at,
-        location,
-        species:species_id (scientific_name, common_name_pt, kingdom),
-        photos (url, is_primary),
-        user:user_id (username, avatar_url)
-      `)
-      .eq('user_id', user.id)
+      .rpc('get_observations', {
+        p_status: null,
+        p_kingdom: activeFilter !== 'Todas' ? KINGDOM_MAP[activeFilter] : null,
+        p_date_from: null,
+      })
+
+      console.log('total obs:', data?.length)
+      console.log('obs com location:', data?.filter(o => o.location)?.length)
+      console.log('primeira location:', JSON.stringify(data?.[0]?.location))
+      console.log('error:', JSON.stringify(error))
 
     if (!error && data) {
-      let filtered = data.filter(o => o.location)
-
-      if (activeFilter !== 'Todas') {
-        filtered = filtered.filter(o =>
-          o.species?.kingdom === KINGDOM_MAP[activeFilter]
-        )
-      }
-
-      const parsed = filtered.map(o => {
-        const coords = parseLocation(o.location)
-        return { ...o, coords }
-      }).filter(o => o.coords)
+      console.log('primeiro registo:', JSON.stringify(data?.[0]))
+      const myObs = data.filter(o => o.user_id === user.id && o.latitude != null && o.longitude != null)
+  
+      const parsed = myObs.map(o => ({
+        ...o,
+        coords: { latitude: o.latitude, longitude: o.longitude },
+        species: { scientific_name: o.scientific_name, common_name_pt: o.common_name_pt, kingdom: o.kingdom },
+        user: { username: o.username, avatar_url: o.avatar_url },
+        photos: [],
+      }))
 
       setObservations(parsed)
     }
@@ -79,6 +80,8 @@ export default function Map() {
   function parseLocation(location) {
     try {
       if (typeof location === 'string') {
+        // Formato WKB hex — converter via query no supabase
+        // Formato POINT(lon lat)
         const match = location.match(/POINT\(([^\s]+)\s+([^\)]+)\)/)
         if (match) {
           return {
@@ -151,6 +154,7 @@ export default function Map() {
             key={obs.id}
             coordinate={obs.coords}
             onPress={() => setSelected(obs)}
+            pinColor={STATUS_COLORS[obs.status] || '#888'}
           >
             <View style={[styles.pin, { backgroundColor: STATUS_COLORS[obs.status] || '#888' }]}>
               <Ionicons name="leaf" size={14} color="#fff" />
@@ -171,7 +175,7 @@ export default function Map() {
 
       {/* Botão recentrar */}
       <TouchableOpacity style={[styles.recenterBtn, { bottom: selected ? 200 : 90 }]} onPress={centerOnUser}>
-        <Ionicons name="locate" size={22} color="#1a3c2e" />
+        <Ionicons name="locate" size={30} color="#1a3c2e" />
       </TouchableOpacity>
 
       {/* Card de detalhe */}
@@ -209,7 +213,9 @@ export default function Map() {
                   </View>
                   <Text style={styles.username}>@{selected.user?.username}</Text>
                 </View>
-                <Text style={styles.detailLink}>Ver detalhes →</Text>
+                <TouchableOpacity onPress={() => router.push(`/observation/${selected.id}`)}>
+                  <Text style={styles.detailLink}>Ver detalhes →</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -235,10 +241,10 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, color: '#555' },
   filterTextActive: { color: '#fff', fontWeight: '600' },
   pin: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff', elevation: 3 },
-  legend: { position: 'absolute', bottom: 90, left: 16, backgroundColor: '#fff', borderRadius: 10, padding: 8, gap: 4, elevation: 3 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legend: { position: 'absolute', bottom: 90, left: 16, backgroundColor: '#fff', borderRadius: 10, padding: 14, gap: 4, elevation: 3 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 10},
   legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontSize: 11, color: '#555' },
+  legendText: { fontSize: 14, color: '#555' },
   recenterBtn: { position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 4 },
   card: { position: 'absolute', bottom: 80, left: 16, right: 16 },
   cardInner: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', elevation: 5 },

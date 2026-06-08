@@ -11,8 +11,31 @@ export default function Login() {
 
   async function handleLogin() {
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) Alert.alert('Erro', error.message)
+  
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+  
+    if (authError) {
+      Alert.alert('Erro', 'Email ou password incorretos.')
+      setLoading(false)
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_active')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (!profile?.is_active) {
+      await supabase.auth.signOut()
+      Alert.alert(
+        'Conta desativada',
+        'A sua conta foi desativada.'
+      )
+      setLoading(false)
+      return
+    }
+
     setLoading(false)
   }
 

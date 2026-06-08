@@ -24,9 +24,11 @@ export default function Feed() {
   const [commentText, setCommentText] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [likeLoadingIds, setLikeLoadingIds] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     fetchObservations()
+    fetchUnreadCount()
   }, [activeFilter])  
 
   useFocusEffect(
@@ -34,6 +36,14 @@ export default function Feed() {
       fetchObservations()
     }, [activeFilter])
   )
+
+  async function fetchUnreadCount() {
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_read', false)
+    setUnreadCount(count || 0)
+  }
 
   async function fetchObservations() {
     setLoading(true)
@@ -150,32 +160,37 @@ export default function Feed() {
     const isCommentOpen = activeCommentId === item.id
 
     return (
-      <TouchableOpacity style={styles.card} activeOpacity={0.9}>
-        <View style={styles.imagePlaceholder}>
-          {primaryPhoto?.url ? (
-            <Image source={{ uri: primaryPhoto.url }} style={styles.cardImage} />
-          ) : (
-            <Ionicons name="leaf-outline" size={48} color="#ccc" />
-          )}
-        </View>
-        <View style={styles.cardBadge}>
-          <Ionicons name="checkmark-circle" size={14} color="#fff" />
-          <Text style={styles.cardBadgeText}>Validada</Text>
-        </View>
-        <View style={styles.cardBody}>
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.speciesName}>{speciesName}</Text>
-              {commonName ? <Text style={styles.commonName}>{commonName}</Text> : null}
+      <View style={styles.card}>
+        <TouchableOpacity activeOpacity={0.9} onPress={() => router.push(`/observation/${item.id}`)}>
+          <View style={styles.imagePlaceholder}>
+            {primaryPhoto?.url ? (
+              <Image source={{ uri: primaryPhoto.url }} style={styles.cardImage} />
+            ) : (
+              <Ionicons name="leaf-outline" size={48} color="#ccc" />
+            )}
+          </View>
+          <View style={styles.cardBadge}>
+            <Ionicons name="checkmark-circle" size={14} color="#fff" />
+            <Text style={styles.cardBadgeText}>Validada</Text>
+          </View>
+          <View style={styles.cardBody}>
+            <View style={styles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.speciesName}>{speciesName}</Text>
+                {commonName ? <Text style={styles.commonName}>{commonName}</Text> : null}
+              </View>
             </View>
-            <Ionicons name="ellipsis-vertical" size={20} color="#999" />
+            <View style={styles.cardMeta}>
+              <Ionicons name="location-outline" size={14} color="#666" />
+              <Text style={styles.metaText}>Localização</Text>
+              <Ionicons name="time-outline" size={14} color="#666" style={{ marginLeft: 12 }} />
+              <Text style={styles.metaText}>{timeAgo(item.observed_at)}</Text>
+            </View>
           </View>
-          <View style={styles.cardMeta}>
-            <Ionicons name="location-outline" size={14} color="#666" />
-            <Text style={styles.metaText}>Localização</Text>
-            <Ionicons name="time-outline" size={14} color="#666" style={{ marginLeft: 12 }} />
-            <Text style={styles.metaText}>{timeAgo(item.observed_at)}</Text>
-          </View>
+        </TouchableOpacity>
+
+        {/* Footer com likes e comentários — fora do TouchableOpacity */}
+        <View style={[styles.cardBody, { paddingTop: 0 }]}>
           <View style={styles.cardFooter}>
             <View style={styles.userRow}>
               <View style={styles.avatar}>
@@ -192,39 +207,38 @@ export default function Feed() {
                 style={styles.actionBtn}
                 onPress={() => {
                   if (isCommentOpen) {
-                    setActiveCommentId(null)
-                    setCommentText('')
-                  } else {
-                    setActiveCommentId(item.id)
-                  }
-                }}
-              >
-                <Ionicons name="chatbubble-outline" size={16} color="#666" />
-                <Text style={styles.statText}>{item.comments?.length || 0}</Text>
-              </TouchableOpacity>
-            </View>
+                  setActiveCommentId(null)
+                  setCommentText('')
+                } else {
+                  setActiveCommentId(item.id)
+                }
+              }}
+            >
+              <Ionicons name="chatbubble-outline" size={16} color="#666" />
+              <Text style={styles.statText}>{item.comments?.length || 0}</Text>
+            </TouchableOpacity>
           </View>
-
-          {isCommentOpen && (
-            <View style={styles.commentBox}>
-              <TextInput
-                style={styles.commentInput}
-                value={commentText}
-                onChangeText={setCommentText}
-                placeholder="Escreve um comentário..."
-                placeholderTextColor="#999"
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!commentText.trim() || actionLoading) && styles.sendBtnDisabled]}
-                onPress={() => submitComment(item.id)}
-                disabled={!commentText.trim() || actionLoading}
-              >
-                <Text style={styles.sendBtnText}>Enviar</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
-      </TouchableOpacity>
+        {isCommentOpen && (
+          <View style={styles.commentBox}>
+            <TextInput
+              style={styles.commentInput}
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Escreve um comentário..."
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, (!commentText.trim() || actionLoading) && styles.sendBtnDisabled]}
+              onPress={() => submitComment(item.id)}
+              disabled={!commentText.trim() || actionLoading}
+            >
+              <Text style={styles.sendBtnText}>Enviar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        </View>
+      </View>
     )
   }
 
@@ -233,6 +247,14 @@ export default function Feed() {
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>BioRegisto</Text>
+          <TouchableOpacity onPress={() => router.push('/notifications')} style={{ position: 'relative' }}>
+        <Ionicons name="notifications-outline" size={24} color="#1a3c2e" />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={18} color="#999" style={{ marginRight: 8 }} />
@@ -267,6 +289,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1a3c2e' },
+  badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#dc2626', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 15, borderRadius: 35, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#eee' },
   searchInput: { flex: 1, fontSize: 14, color: '#333' },
   filters: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 10 },

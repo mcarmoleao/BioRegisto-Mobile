@@ -18,18 +18,11 @@ import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
 import * as FileSystem from 'expo-file-system/legacy'
 
-const KINGDOM_OPTIONS = [
-  { label: "Animais", value: "ANIMALIA" },
-  { label: "Plantas", value: "PLANTAE" },
-  { label: "Fungos", value: "FUNGI" },
-];
-
 export default function Add() {
   const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState([]);
   const [description, setDescription] = useState("");
   const [suggestedSpecies, setSuggestedSpecies] = useState("");
-  const [suggestedKingdom, setSuggestedKingdom] = useState("ANIMALIA");
   const [location, setLocation] = useState(null);
   const [locationName, setLocationName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
@@ -138,10 +131,6 @@ export default function Add() {
       );
       return;
     }
-    if (!suggestedKingdom) {
-      Alert.alert("Erro", "Seleciona o grupo: Animais, Plantas ou Fungos.");
-      return;
-    }
 
     setLoading(true);
     try {
@@ -156,7 +145,6 @@ export default function Add() {
           user_id: user.id,
           description: description.trim(),
           suggested_species: suggestedSpecies.trim() || null,
-          suggested_kingdom: suggestedKingdom,
           location: `POINT(${location.longitude} ${location.latitude})`,
           observed_at: new Date().toISOString(),
           is_public: isPublic,
@@ -200,7 +188,6 @@ export default function Add() {
     setPhotos([]);
     setDescription("");
     setSuggestedSpecies("");
-    setSuggestedKingdom("ANIMALIA");
     setLocation(null);
     setLocationName("");
     setIsPublic(true);
@@ -281,28 +268,6 @@ export default function Add() {
           <Ionicons name="information-circle-outline" size={13} color="#999" />{" "}
           Um técnico irá confirmar a classificação
         </Text>
-      </View>
-
-      {/* Grupo sugerido */}
-      <View style={styles.section}>
-        <Text style={styles.label}>Grupo da observação</Text>
-        <View style={styles.kingdomRow}>
-          {KINGDOM_OPTIONS.map((option) => {
-            const selected = suggestedKingdom === option.value;
-            return (
-              <TouchableOpacity
-                key={option.value}
-                style={[styles.kingdomBtn, selected && styles.kingdomBtnActive]}
-                onPress={() => setSuggestedKingdom(option.value)}
-              >
-                <Text style={[styles.kingdomBtnText, selected && styles.kingdomBtnTextActive]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <Text style={styles.hint}>Este valor é inicial e pode ser corrigido no backoffice.</Text>
       </View>
 
       {/* Descrição */}
@@ -410,22 +375,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 },
   optional: { fontWeight: "400", color: "#999" },
   hint: { fontSize: 12, color: "#999", marginTop: 6 },
-  kingdomRow: { flexDirection: "row", gap: 8 },
-  kingdomBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 20,
-    paddingVertical: 10,
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-  kingdomBtnActive: {
-    backgroundColor: "#1a3c2e",
-    borderColor: "#1a3c2e",
-  },
-  kingdomBtnText: { fontSize: 13, color: "#555", fontWeight: "600" },
-  kingdomBtnTextActive: { color: "#fff" },
   input: {
     borderWidth: 1,
     borderColor: "#ddd",

@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  heroBadge: { position: 'absolute', bottom: 50, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  heroBadge: { position: 'absolute', bottom: 62, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   heroBadgeText: { fontSize: 12, fontWeight: '600' },
   thumbsRow: { position: 'absolute', bottom: 8, left: 0, right: 0 },
   thumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 2, borderColor: 'transparent' },

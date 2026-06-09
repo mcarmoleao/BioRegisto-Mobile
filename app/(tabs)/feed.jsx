@@ -15,6 +15,7 @@ const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FU
 export default function Feed() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const [currentUsername, setCurrentUsername] = useState(null)
   const [observations, setObservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -49,6 +50,13 @@ export default function Feed() {
     setLoading(true)
     const { data: authData } = await supabase.auth.getUser()
     setCurrentUserId(authData?.user?.id || null)
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', authData?.user?.id)
+      .single()
+    setCurrentUsername(profileData?.username || null)
 
     let query = supabase
       .from('observations')
@@ -192,14 +200,25 @@ export default function Feed() {
         {/* Footer com likes e comentários — fora do TouchableOpacity */}
         <View style={[styles.cardBody, { paddingTop: 0 }]}>
           <View style={styles.cardFooter}>
-            <View style={styles.userRow}>
+            <TouchableOpacity
+              style={styles.userRow}
+              onPress={() => {
+                console.log('navigating to:', `/user/${item.user?.username}`)
+                router.push(`/user/${item.user?.username}`)}}
+            >
               <View style={styles.avatar}>
                 <Ionicons name="person" size={14} color="#fff" />
               </View>
               <Text style={styles.username}>@{item.user?.username || 'utilizador'}</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.actionsRow}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item)} disabled={likeLoadingIds.includes(item.id)}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => {
+                if (item.user?.username === currentUsername) {
+                 router.push('/(tabs)/profile')
+                } else {
+                 router.push(`/user/${item.user?.username}`)
+               }
+              }}>
                 <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={16} color={likedByMe ? '#dc2626' : '#666'} />
                 <Text style={styles.statText}>{item.likes?.length || 0}</Text>
               </TouchableOpacity>

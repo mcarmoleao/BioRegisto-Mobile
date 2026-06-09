@@ -55,13 +55,7 @@ export default function Map() {
         p_date_from: null,
       })
 
-      console.log('total obs:', data?.length)
-      console.log('obs com location:', data?.filter(o => o.location)?.length)
-      console.log('primeira location:', JSON.stringify(data?.[0]?.location))
-      console.log('error:', JSON.stringify(error))
-
     if (!error && data) {
-      console.log('primeiro registo:', JSON.stringify(data?.[0]))
       const myObs = data.filter(o => o.user_id === user.id && o.latitude != null && o.longitude != null)
   
       const parsed = myObs.map(o => ({

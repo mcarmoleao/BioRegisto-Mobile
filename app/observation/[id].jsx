@@ -32,6 +32,8 @@ export default function ObservationDetail() {
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [activePhoto, setActivePhoto] = useState(0)
+  const [comments, setComments] = useState([])
+  const [likes, setLikes] = useState([])
 
   const [description, setDescription] = useState('')
   const [suggestedSpecies, setSuggestedSpecies] = useState('')
@@ -70,6 +72,21 @@ export default function ObservationDetail() {
       setIsPublic(obs.is_public ?? true)
     }
     if (photosData) setPhotos(photosData)
+
+    const { data: commentsData } = await supabase
+      .from('comments')
+      .select('id, content, created_at, user:user_id (username, avatar_url, full_name)')
+      .eq('observation_id', id)
+      .order('created_at', { ascending: true })
+
+    const { data: likesData } = await supabase
+      .from('likes')
+      .select('id, created_at, user:user_id (username, avatar_url, full_name)')
+      .eq('observation_id', id)
+      .order('created_at', { ascending: false })
+
+    if (commentsData) setComments(commentsData)
+    if (likesData) setLikes(likesData)
     setLoading(false)
   }
 
@@ -300,6 +317,50 @@ export default function ObservationDetail() {
           )}
         </View>
 
+        {/* Comentários */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Comentários</Text>
+          {comments.length === 0 ? (
+            <Text style={styles.noValue}>Ainda sem comentários</Text>
+          ) : (
+            comments.map(comment => (
+              <View key={comment.id} style={styles.commentItem}>
+                <View style={styles.commentAvatar}>
+                  {comment.user?.avatar_url ? (
+                    <Image source={{ uri: comment.user.avatar_url }} style={styles.commentAvatarImage} />
+                  ) : (
+                    <Ionicons name="person" size={12} color="#fff" />
+                  )}
+                </View>
+                <View style={styles.commentBody}>
+                  <Text style={styles.commentAuthor}>{comment.user?.full_name || comment.user?.username || 'utilizador'}</Text>
+                  <Text style={styles.commentText}>{comment.content}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Likes */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Gostos</Text>
+          {likes.length === 0 ? (
+            <Text style={styles.noValue}>Ainda sem likes</Text>
+          ) : (
+            <View style={styles.likesRow}>
+              {likes.map(like => (
+                <View key={like.id} style={styles.likeAvatar}>
+                  {like.user?.avatar_url ? (
+                    <Image source={{ uri: like.user.avatar_url }} style={styles.likeAvatarImage} />
+                  ) : (
+                    <Ionicons name="heart" size={12} color="#fff" />
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Observação pública */}
         <View style={[styles.section, styles.switchRow]}>
           <View>
@@ -389,6 +450,15 @@ const styles = StyleSheet.create({
   taxPendingText: { fontSize: 13, color: '#bbb' },
   miniMap: { height: 140, borderRadius: 10, marginBottom: 8 },
   coordsText: { fontSize: 12, color: '#888' },
+  commentItem: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
+  commentAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  commentAvatarImage: { width: '100%', height: '100%' },
+  commentBody: { flex: 1 },
+  commentAuthor: { fontSize: 13, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 },
+  commentText: { fontSize: 14, color: '#333', lineHeight: 20 },
+  likesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  likeAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  likeAvatarImage: { width: '100%', height: '100%' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   validatedBy: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   validatedAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },

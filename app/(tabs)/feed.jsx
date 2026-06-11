@@ -35,13 +35,20 @@ export default function Feed() {
   useFocusEffect(
     useCallback(() => {
       fetchObservations()
+      fetchUnreadCount()
     }, [activeFilter])
   )
 
   async function fetchUnreadCount() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setUnreadCount(0)
+      return
+    }
     const { count } = await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
       .eq('is_read', false)
     setUnreadCount(count || 0)
   }
@@ -61,7 +68,7 @@ export default function Feed() {
     let query = supabase
       .from('observations')
       .select(`
-        id, description, observed_at, suggested_species, status, is_public,
+        id, user_id, description, observed_at, suggested_species, status, is_public,
         species:species_id (scientific_name, common_name_pt, kingdom),
         user:user_id (username, avatar_url),
         photos (url, is_primary),
@@ -141,9 +148,27 @@ export default function Feed() {
       })
 
     if (!error) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: ownerObservation } = await supabase
+        .from('observations')
+        .select('user_id')
+        .eq('id', observationId)
+        .single()
+
+      if (ownerObservation?.user_id && ownerObservation.user_id !== currentUserId) {
+        await supabase.from('notifications').insert({
+          user_id: ownerObservation.user_id,
+          type: 'COMMENT',
+          message: `${currentUsername || user?.email || 'Um utilizador'} comentou na tua observação`,
+          observation_id: observationId,
+          is_read: false,
+        })
+      }
+
       setCommentText('')
       setActiveCommentId(null)
       await fetchObservations()
+      await fetchUnreadCount()
     }
     setActionLoading(false)
   }
@@ -207,18 +232,16 @@ export default function Feed() {
                 router.push(`/user/${item.user?.username}`)}}
             >
               <View style={styles.avatar}>
-                <Ionicons name="person" size={14} color="#fff" />
+                {item.user?.avatar_url ? (
+                  <Image source={{ uri: item.user.avatar_url }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person" size={14} color="#fff" />
+                )}
               </View>
               <Text style={styles.username}>@{item.user?.username || 'utilizador'}</Text>
             </TouchableOpacity>
             <View style={styles.actionsRow}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => {
-                if (item.user?.username === currentUsername) {
-                 router.push('/(tabs)/profile')
-                } else {
-                 router.push(`/user/${item.user?.username}`)
-               }
-              }}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item)}>
                 <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={16} color={likedByMe ? '#dc2626' : '#666'} />
                 <Text style={styles.statText}>{item.likes?.length || 0}</Text>
               </TouchableOpacity>
@@ -331,6 +354,7 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 13 },
   username: { fontSize: 13, color: '#555' },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   actionBtn: {

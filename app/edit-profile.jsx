@@ -89,7 +89,8 @@ export default function EditProfile() {
   async function uploadAvatar(uri) {
     const { data: { user } } = await supabase.auth.getUser()
     const ext = uri.split('.').pop().toLowerCase().split('?')[0]
-    const path = `${user.id}/avatar.${ext}`
+    const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const path = `${user.id}/${fileId}.${ext}`
 
     const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' })
     const byteCharacters = atob(base64)
@@ -101,7 +102,7 @@ export default function EditProfile() {
 
     const { error } = await supabase.storage
       .from('avatars')
-      .upload(path, byteArray, { contentType: `image/${ext}`, upsert: true })
+      .upload(path, byteArray, { contentType: `image/${ext}`, upsert: false })
 
     if (error) throw error
 

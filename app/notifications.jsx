@@ -19,14 +19,25 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchNotifications()
+    ;(async () => {
+      await markAllRead()
+      await fetchNotifications()
+    })()
   }, [])
 
   async function fetchNotifications() {
     setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setNotifications([])
+      setLoading(false)
+      return
+    }
+
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (!error) setNotifications(data)
@@ -34,11 +45,14 @@ export default function Notifications() {
   }
 
   async function markAllRead() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
     await supabase
       .from('notifications')
       .update({ is_read: true })
+      .eq('user_id', user.id)
       .eq('is_read', false)
-    fetchNotifications()
   }
 
   async function markRead(id) {

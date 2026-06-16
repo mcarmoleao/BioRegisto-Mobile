@@ -34,6 +34,7 @@ export default function ObservationDetail() {
   const [activePhoto, setActivePhoto] = useState(0)
   const [comments, setComments] = useState([])
   const [likes, setLikes] = useState([])
+  const [audit, setAudit] = useState(null)
 
   const [description, setDescription] = useState('')
   const [suggestedSpecies, setSuggestedSpecies] = useState('')
@@ -59,7 +60,25 @@ export default function ObservationDetail() {
     if (obs?.species_id) {
       const { data: speciesData } = await supabase
         .from('species')
-        .select('*')
+        .select(`
+          *,
+          genus:genus_id (
+            name,
+            family:family_id (
+              name,
+              order:order_id (
+                name,
+                class:class_id (
+                  name,
+                  phylum:phylum_id (
+                    name,
+                    kingdom
+                  )
+                )
+              )
+            )
+          )
+        `)
         .eq('id', obs.species_id)
         .single()
       setSpecies(speciesData)
@@ -72,6 +91,21 @@ export default function ObservationDetail() {
       setIsPublic(obs.is_public ?? true)
     }
     if (photosData) setPhotos(photosData)
+
+    if (obs?.status === 'VALIDATED' || obs?.status === 'REJECTED') {
+      const { data: auditData } = await supabase
+        .from('observation_audit')
+        .select(`
+          action, created_at, rejection_reason,
+          technician:user_id (username, full_name)
+        `)
+        .eq('observation_id', id)
+        .in('action', ['VALIDATED', 'REJECTED'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      setAudit(auditData)
+    }
 
     const { data: commentsData } = await supabase
       .from('comments')
@@ -244,6 +278,17 @@ export default function ObservationDetail() {
             <Text style={styles.sectionValue}>{observation.description}</Text>
           )}
         </View>
+        
+        {/*Motivo rejeição*/}
+        {observation.status === 'REJECTED' && audit?.rejection_reason && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Motivo de rejeição</Text>
+            <View style={styles.rejectionBox}>
+              <Ionicons name="information-circle-outline" size={16} color="#dc2626" />
+              <Text style={styles.rejectionText}>{audit.rejection_reason}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Espécie sugerida — só se não tiver espécie confirmada */}
         {!species && (
@@ -263,18 +308,17 @@ export default function ObservationDetail() {
           {species ? (
             <View style={styles.taxGrid}>
               {[
-                ['Filo', species.phylum],
-                ['Div.', species.phylum],
-                ['Classe', species.class],
-                ['Ordem', species.order],
-                ['Família', species.family],
-                ['Género', species.genus],
-              ].map(([label, value]) => value ? (
+                ['Filo', species.genus?.family?.order?.class?.phylum?.name],
+                ['Classe', species.genus?.family?.order?.class?.name],
+                ['Ordem', species.genus?.family?.order?.name],
+                ['Família', species.genus?.family?.name],
+                ['Género', species.genus?.name],
+              ].filter(([_, val]) => val).map(([label, value]) => (
                 <View key={label} style={styles.taxItem}>
                   <Text style={styles.taxLabel}>{label}</Text>
                   <Text style={styles.taxValue}>{value}</Text>
                 </View>
-              ) : null)}
+              ))}
               {species.scientific_name && (
                 <View style={[styles.taxItem, { width: '100%' }]}>
                   <Text style={styles.taxLabel}>Nome científico</Text>
@@ -282,7 +326,7 @@ export default function ObservationDetail() {
                 </View>
               )}
             </View>
-          ) : (
+            ) : (
             <View style={styles.taxPending}>
               <Ionicons name="time-outline" size={24} color="#ccc" />
               <Text style={styles.taxPendingText}>Aguarda validação por um técnico</Text>
@@ -381,14 +425,19 @@ export default function ObservationDetail() {
         </View>
 
         {/* Validado por */}
-        {observation.status === 'VALIDATED' && (
+        {(observation.status === 'VALIDATED' || observation.status === 'REJECTED') && audit && (
           <View style={styles.validatedBy}>
             <View style={styles.validatedAvatar}>
               <Ionicons name="person" size={14} color="#fff" />
             </View>
-            <Text style={styles.validatedText}>
-              Validado por um técnico · {new Date(observation.updated_at).toLocaleDateString('pt-PT')}
-            </Text>
+            <View>
+              <Text style={styles.validatedText}>
+                {observation.status === 'VALIDATED' ? 'Validado' : 'Rejeitado'} por {audit.technician?.full_name || audit.technician?.username}
+              </Text>
+              <Text style={styles.validatedDate}>
+                {new Date(audit.created_at).toLocaleDateString('pt-PT')}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -424,11 +473,13 @@ const styles = StyleSheet.create({
   headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  heroBadge: { position: 'absolute', bottom: 62, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  heroBadge: { position: 'absolute', bottom: 20, left: 300, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   heroBadgeText: { fontSize: 12, fontWeight: '600' },
   thumbsRow: { position: 'absolute', bottom: 8, left: 0, right: 0 },
   thumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 2, borderColor: 'transparent' },
   thumbActive: { borderColor: '#fff' },
+  rejectionBox: { flexDirection: 'row', gap: 8, backgroundColor: '#fee2e2', padding: 12, borderRadius: 8, alignItems: 'flex-start' },
+  rejectionText: { flex: 1, fontSize: 14, color: '#dc2626', lineHeight: 20 },
   addThumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 2, borderColor: '#fff', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   infoSection: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   speciesName: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
@@ -463,6 +514,7 @@ const styles = StyleSheet.create({
   validatedBy: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   validatedAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
   validatedText: { fontSize: 13, color: '#555' },
+  validatedDate: { fontSize: 11, color: '#aaa', marginTop: 2 },
   actions: { padding: 16, gap: 10 },
   saveBtn: { backgroundColor: '#1a3c2e', borderRadius: 10, padding: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },

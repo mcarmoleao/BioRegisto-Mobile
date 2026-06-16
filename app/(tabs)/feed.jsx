@@ -65,29 +65,37 @@ export default function Feed() {
       .single()
     setCurrentUsername(profileData?.username || null)
 
-    let query = supabase
-      .from('observations')
-      .select(`
-        id, user_id, description, observed_at, suggested_species, status, is_public,
-        species:species_id (scientific_name, common_name_pt, kingdom),
-        user:user_id (username, avatar_url),
-        photos (url, is_primary),
-        likes (user_id),
-        comments (id)
-      `)
-      .eq('status', 'VALIDATED')
-      .eq('is_public', true)
-      .order('observed_at', { ascending: false })
+    const { data, error } = await supabase.rpc('get_observations', {
+      p_status: 'VALIDATED',
+      p_kingdom: activeFilter !== 'Todos' ? KINGDOM_MAP[activeFilter] : null,
+      p_date_from: null,
+    })
 
-    if (activeFilter !== 'Todos') {
-      query = query.eq('species.kingdom', KINGDOM_MAP[activeFilter])
-    }
+    if (!error && data) {
+      const visible = data.filter(obs => obs.is_public === true)
+      const ids = visible.map(o => o.id)
 
-    const { data, error } = await query
-    if (!error) {
-      // Safety guard to ensure feed only shows public validated observations.
-      const visible = (data || []).filter(obs => obs.status === 'VALIDATED' && obs.is_public === true)
-      setObservations(visible)
+      // Buscar likes, comentários e fotos
+      const [likesRes, commentsRes, photosRes] = await Promise.all([
+        supabase.from('likes').select('observation_id, user_id').in('observation_id', ids),
+        supabase.from('comments').select('id, observation_id').in('observation_id', ids),
+        supabase.from('photos').select('observation_id, url, is_primary').in('observation_id', ids),
+      ])
+
+      const adapted = visible.map(obs => ({
+        ...obs,
+        species: obs.scientific_name ? {
+          scientific_name: obs.scientific_name,
+          common_name_pt: obs.common_name_pt,
+          kingdom: obs.kingdom,
+        } : null,
+        user: { username: obs.username, avatar_url: obs.avatar_url },
+        photos: (photosRes.data || []).filter(p => p.observation_id === obs.id),
+        likes: (likesRes.data || []).filter(l => l.observation_id === obs.id),
+        comments: (commentsRes.data || []).filter(c => c.observation_id === obs.id),
+      }))
+
+      setObservations(adapted)
     }
     setLoading(false)
   }

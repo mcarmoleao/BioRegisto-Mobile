@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -18,45 +18,31 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    ;(async () => {
-      await markAllRead()
-      await fetchNotifications()
-    })()
-  }, [])
+  useEffect(() => { fetchNotifications() }, [])
 
   async function fetchNotifications() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setNotifications([])
-      setLoading(false)
-      return
-    }
-
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
+      .select(`
+        *,
+        actor:actor_id (username, avatar_url)
+      `)
       .order('created_at', { ascending: false })
 
-    if (!error) setNotifications(data)
+    if (data) setNotifications(data)
     setLoading(false)
   }
 
   async function markAllRead() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false)
+    await supabase.from('notifications').update({ is_read: true }).eq('is_read', false)
+    fetchNotifications()
   }
 
-  async function markRead(id) {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+  async function handlePress(item) {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', item.id)
+    if (item.observation_id) router.push(`/observation/${item.observation_id}`)
+    fetchNotifications()
   }
 
   function timeAgo(dateStr) {
@@ -66,33 +52,73 @@ export default function Notifications() {
     return `${Math.floor(diff / 1440)}d atrás`
   }
 
-  function renderItem({ item }) {
+  function getIcon(item) {
     const config = TYPE_CONFIG[item.type] || { icon: 'notifications', color: '#888', bg: '#f5f5f5' }
 
+    // Para likes e comentários, mostra avatar do actor
+    if ((item.type === 'LIKE' || item.type === 'COMMENT') && item.actor) {
+      return (
+        <View style={styles.avatarContainer}>
+          {item.actor.avatar_url ? (
+            <Image source={{ uri: item.actor.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatarFallback, { backgroundColor: config.color }]}>
+              <Text style={styles.avatarText}>
+                {item.actor.username?.charAt(0)?.toUpperCase() || '?'}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.typeBadge, { backgroundColor: config.color }]}>
+            <Ionicons name={config.icon} size={10} color="#fff" />
+          </View>
+        </View>
+      )
+    }
+
+    // Para validadas e rejeitadas, mostra ícone
+    return (
+      <View style={[styles.iconContainer, { backgroundColor: config.bg }]}>
+        <Ionicons name={config.icon} size={24} color={config.color} />
+      </View>
+    )
+  }
+
+  function getMessage(item) {
+    if (item.type === 'REJECTED') {
+      return (
+        <View>
+          <Text style={[styles.message, !item.is_read && styles.messageUnread]}>
+            {item.message}
+          </Text>
+          <Text style={styles.tapHint}>Toca para ver os detalhes →</Text>
+        </View>
+      )
+    }
+    return (
+      <Text style={[styles.message, !item.is_read && styles.messageUnread]}>
+        {item.message}
+      </Text>
+    )
+  }
+
+  const unreadCount = notifications.filter(n => !n.is_read).length
+
+  function renderItem({ item }) {
     return (
       <TouchableOpacity
         style={[styles.item, !item.is_read && styles.itemUnread]}
         activeOpacity={0.7}
-        onPress={() => {
-          markRead(item.id)
-          if (item.observation_id) router.push(`/observation/${item.observation_id}`)
-        }}
+        onPress={() => handlePress(item)}
       >
-        <View style={[styles.iconContainer, { backgroundColor: config.bg }]}>
-          <Ionicons name={config.icon} size={22} color={config.color} />
-        </View>
+        {getIcon(item)}
         <View style={styles.itemContent}>
-          <Text style={[styles.message, !item.is_read && styles.messageUnread]}>
-            {item.message}
-          </Text>
+          {getMessage(item)}
           <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
         </View>
         {!item.is_read && <View style={styles.unreadDot} />}
       </TouchableOpacity>
     )
   }
-
-  const unreadCount = notifications.filter(n => !n.is_read).length
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -103,9 +129,10 @@ export default function Notifications() {
         <Text style={styles.headerTitle}>Notificações</Text>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={markAllRead}>
-            <Text style={styles.markAllRead}>Marcar todas como lidas</Text>
+            <Text style={styles.markAllRead}>Marcar todas lidas</Text>
           </TouchableOpacity>
         )}
+        {unreadCount === 0 && <View style={{ width: 80 }} />}
       </View>
 
       {loading ? (
@@ -130,16 +157,22 @@ export default function Notifications() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  backBtn: { marginRight: 12 },
-  headerTitle: { flex: 1, fontSize: 20, fontWeight: 'bold', color: '#1a3c2e' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a3c2e' },
   markAllRead: { fontSize: 12, color: '#1a3c2e', fontWeight: '600' },
   item: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 12 },
   itemUnread: { backgroundColor: '#f8fffe' },
-  iconContainer: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  iconContainer: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  avatarContainer: { position: 'relative', width: 48, height: 48 },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarFallback: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  typeBadge: { position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
   itemContent: { flex: 1 },
   message: { fontSize: 14, color: '#555', lineHeight: 20 },
   messageUnread: { color: '#1a1a1a', fontWeight: '600' },
+  tapHint: { fontSize: 12, color: '#dc2626', marginTop: 2 },
   time: { fontSize: 12, color: '#999', marginTop: 4 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1a3c2e' },
   empty: { alignItems: 'center', marginTop: 80, gap: 12 },

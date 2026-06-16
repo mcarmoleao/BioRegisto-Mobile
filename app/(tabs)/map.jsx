@@ -48,22 +48,21 @@ export default function Map() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { data, error } = await supabase
-      .rpc('get_observations', {
-        p_status: null,
-        p_kingdom: activeFilter !== 'Todas' ? KINGDOM_MAP[activeFilter] : null,
-        p_date_from: null,
-      })
+    const { data, error } = await supabase.rpc('get_observations', {
+      p_status: null,
+      p_kingdom: activeFilter !== 'Todas' ? KINGDOM_MAP[activeFilter] : null,
+      p_date_from: null,
+    })
 
     if (!error && data) {
       const myObs = data.filter(o => o.user_id === user.id && o.latitude != null && o.longitude != null)
-  
+
       const parsed = myObs.map(o => ({
         ...o,
         coords: { latitude: o.latitude, longitude: o.longitude },
-        species: { scientific_name: o.scientific_name, common_name_pt: o.common_name_pt, kingdom: o.kingdom },
+        species: { scientific_name: o.scientific_name, common_name_pt: o.common_name_pt },
         user: { username: o.username, avatar_url: o.avatar_url },
-        photos: [],
+        photos: o.photo_url ? [{ url: o.photo_url, is_primary: true }] : [],
       }))
 
       setObservations(parsed)

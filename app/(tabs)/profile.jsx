@@ -64,12 +64,16 @@ export default function Profile() {
       .eq('user_id', user.id)
       .order('observed_at', { ascending: false })
 
-    if (activeFilter !== 'Todas') {
-      query = query.eq('species.kingdom', KINGDOM_MAP[activeFilter])
-    }
-
     const { data } = await query
-    if (data) setObservations(data)
+    if (data) {
+      // Aplica o filtro localmente para evitar problemas de joins complexos no Supabase
+      if (activeFilter !== 'Todas') {
+        const filtered = data.filter(obs => obs.species?.kingdom === KINGDOM_MAP[activeFilter])
+        setObservations(filtered)
+      } else {
+        setObservations(data)
+      }
+    }
   }
 
   async function handleLogout() {
@@ -87,8 +91,8 @@ export default function Profile() {
   if (loading) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
 
   const STATUS_ICON = {
-    VALIDATED: { icon: 'checkmark-circle', color: '#1a3c2e' },
-    PENDING: { icon: 'time', color: '#b45309' },
+    VALIDATED: { icon: 'checkmark-circle', color: '#0d723b' },
+    PENDING: { icon: 'time', color: '#fdb924' },
     REJECTED: { icon: 'close-circle', color: '#dc2626' },
   }
 
@@ -143,12 +147,12 @@ export default function Profile() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: '#1a3c2e' }]}>{stats.validated}</Text>
+            <Text style={[styles.statNumber, { color: '#0d723b' }]}>{stats.validated}</Text>
             <Text style={styles.statLabel}>Validadas</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: '#b45309' }]}>{stats.pending}</Text>
+            <Text style={[styles.statNumber, { color: '#fdb924' }]}>{stats.pending}</Text>
             <Text style={styles.statLabel}>Pendentes</Text>
           </View>
           <View style={styles.statDivider} />
@@ -158,7 +162,7 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Filtros */}
+        {/* FILTROS DE CATEGORIA (Injetados aqui!) */}
         <View style={styles.filtersContainer}>
           {FILTERS.map(f => (
             <TouchableOpacity
@@ -166,7 +170,9 @@ export default function Profile() {
               style={[styles.filterBtn, activeFilter === f && styles.filterBtnActive]}
               onPress={() => setActiveFilter(f)}
             >
-              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
+              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
+                {f}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -174,14 +180,14 @@ export default function Profile() {
         {/* Atividade recente */}
         <View style={styles.activitySection}>
           <View style={styles.activityHeader}>
-            <Text style={styles.activityTitle}>Atividade recente</Text>
+            <Text style={styles.activityTitle}>As tuas observações</Text>
             <Text style={styles.activityCount}>{observations.length} observações</Text>
           </View>
 
           {observations.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="leaf-outline" size={48} color="#ddd" />
-              <Text style={styles.emptyText}>Sem observações</Text>
+              <Text style={styles.emptyText}>Sem observações nesta categoria</Text>
             </View>
           ) : (
             <View style={styles.grid}>
@@ -203,7 +209,7 @@ export default function Profile() {
                       </View>
                     )}
                     <View style={[styles.gridBadge, { backgroundColor: statusConfig.color }]}>
-                      <Ionicons name={statusConfig.icon} size={14} color="#fff" />
+                      <Ionicons name={statusConfig.icon} size={12} color="#fff" />
                     </View>
                   </TouchableOpacity>
                 )
@@ -217,12 +223,12 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  headerBg: { height: 100, backgroundColor: '#1a3c2e' },
+  headerBg: { height: 100, backgroundColor: '#0d723b' },
   headerActions: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', paddingHorizontal: 16, gap: 8, zIndex: 10 },
   headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
   avatarContainer: { marginTop: -40, marginLeft: 16, marginBottom: 12 },
   avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#fff' },
-  avatarFallback: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1a3c2e', borderWidth: 3, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  avatarFallback: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#0d723b', borderWidth: 3, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 32, color: '#fff', fontWeight: 'bold' },
   infoSection: { paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   fullName: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
@@ -233,9 +239,9 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: '#eee' },
   statNumber: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   statLabel: { fontSize: 10, color: '#888', marginTop: 2 },
-  filtersContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  filtersContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 16, gap: 8 },
   filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff' },
-  filterBtnActive: { backgroundColor: '#1a3c2e', borderColor: '#1a3c2e' },
+  filterBtnActive: { backgroundColor: '#0d723b', borderColor: '#0d723b' },
   filterText: { fontSize: 13, color: '#555' },
   filterTextActive: { color: '#fff', fontWeight: '600' },
   activitySection: { padding: 16 },

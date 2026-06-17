@@ -186,7 +186,7 @@ export default function EditProfile() {
     setPassword('')
   }
 
-  if (loading) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
+  if (loading) return <ActivityIndicator size="large" color="#0d723b" style={{ flex: 1 }} />
 
   const displayAvatar = avatarUri || avatarUrl
 
@@ -200,7 +200,7 @@ export default function EditProfile() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color="#1a3c2e" />
+            <Ionicons name="arrow-back" size={24} color="#0d723b" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Editar perfil</Text>
           <View style={{ width: 24 }} />
@@ -258,7 +258,7 @@ export default function EditProfile() {
             style={[styles.input, styles.textArea]}
             value={bio}
             onChangeText={setBio}
-            placeholder="Fala um pouco sobre ti..."
+            placeholder="Fale um pouco sobre si..."
             placeholderTextColor="#999"
             multiline
             numberOfLines={3}
@@ -330,9 +330,9 @@ const styles = StyleSheet.create({
   avatarSection: { alignItems: 'center', paddingVertical: 24 },
   avatarWrapper: { position: 'relative' },
   avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#e8f5e9' },
-  avatarFallback: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#e8f5e9' },
+  avatarFallback: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#0d723b', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#e8f5e9' },
   avatarText: { fontSize: 40, color: '#fff', fontWeight: 'bold' },
-  avatarEditBadge: { position: 'absolute', bottom: 2, right: 2, width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+  avatarEditBadge: { position: 'absolute', bottom: 2, right: 2, width: 28, height: 28, borderRadius: 14, backgroundColor: '#0d723b', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
   avatarHint: { fontSize: 12, color: '#888', marginTop: 8 },
   section: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8 },
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   prefix: { paddingHorizontal: 12, fontSize: 15, color: '#888', backgroundColor: '#f5f5f5', paddingVertical: 12 },
   inputPrefix: { flex: 1, padding: 12, fontSize: 15, color: '#333' },
   textArea: { height: 80, textAlignVertical: 'top' },
-  saveBtn: { margin: 16, backgroundColor: '#1a3c2e', borderRadius: 10, padding: 16, alignItems: 'center' },
+  saveBtn: { margin: 16, backgroundColor: '#0d723b', borderRadius: 10, padding: 16, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   modal: { backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%' },
@@ -352,6 +352,6 @@ const styles = StyleSheet.create({
   modalBtns: { flexDirection: 'row', gap: 10 },
   modalCancelBtn: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, alignItems: 'center' },
   modalCancelText: { color: '#555', fontSize: 15 },
-  modalConfirmBtn: { flex: 1, backgroundColor: '#1a3c2e', borderRadius: 8, padding: 12, alignItems: 'center' },
+  modalConfirmBtn: { flex: 1, backgroundColor: '#0d723b', borderRadius: 8, padding: 12, alignItems: 'center' },
   modalConfirmText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 })

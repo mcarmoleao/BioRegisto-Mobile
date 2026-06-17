@@ -126,13 +126,15 @@ export default function Notifications() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#1a3c2e" />
         </TouchableOpacity>
+
         <Text style={styles.headerTitle}>Notificações</Text>
-        {unreadCount > 0 && (
+        {unreadCount > 0 ? (
           <TouchableOpacity onPress={markAllRead}>
-            <Text style={styles.markAllRead}>Marcar todas lidas</Text>
+            <Ionicons name="checkmark-done-outline" size={24} color="#1a3c2e"/>
           </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
         )}
-        {unreadCount === 0 && <View style={{ width: 80 }} />}
       </View>
 
       {loading ? (

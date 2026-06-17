@@ -5,7 +5,7 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
-      tabBarActiveTintColor: '#1a3c2e',
+      tabBarActiveTintColor: '#0d723b',
       tabBarInactiveTintColor: '#999',
     }}>
       <Tabs.Screen name="feed" options={{ title: 'Início', tabBarIcon: ({ color }) => <Ionicons name="leaf-outline" size={24} color={color} /> }} />

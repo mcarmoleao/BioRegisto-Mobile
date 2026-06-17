@@ -406,7 +406,7 @@ export default function ObservationDetail() {
         </View>
 
         {/* Observação pública */}
-        <View style={[styles.section, styles.switchRow]}>
+        {/*<View style={[styles.section, styles.switchRow]}>
           <View>
             <Text style={styles.sectionLabel}>Observação pública</Text>
             <Text style={styles.sectionValueSmall}>Visível após validação</Text>
@@ -422,7 +422,7 @@ export default function ObservationDetail() {
             trackColor={{ false: '#ddd', true: '#1a3c2e' }}
             thumbColor="#fff"
           />
-        </View>
+        </View>*/}
 
         {/* Validado por */}
         {(observation.status === 'VALIDATED' || observation.status === 'REJECTED') && audit && (
@@ -510,7 +510,6 @@ const styles = StyleSheet.create({
   likesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   likeAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   likeAvatarImage: { width: '100%', height: '100%' },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   validatedBy: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   validatedAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
   validatedText: { fontSize: 13, color: '#555' },

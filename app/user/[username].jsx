@@ -28,13 +28,11 @@ export default function UserProfile() {
         .select('*')
         .eq('username', username)
         .single()
-    
-    console.log('profile data:', JSON.stringify(data))
   
     if (data) {
         setProfile(data)
     } else {
-        setLoading(false) // Para o loading mesmo se não encontrar perfil
+        setLoading(false) 
     }
   }
 
@@ -139,7 +137,7 @@ export default function UserProfile() {
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#1a3c2e" style={{ marginTop: 40 }} />
+            <ActivityIndicator size="large" color="#0d723b" style={{ marginTop: 40 }} />
           ) : observations.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="leaf-outline" size={48} color="#ddd" />
@@ -179,11 +177,11 @@ export default function UserProfile() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  headerBg: { height: 100, backgroundColor: '#1a3c2e' },
+  headerBg: { height: 100, backgroundColor: '#0d723b' },
   backBtn: { position: 'absolute', left: 16, top: 8, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
   avatarContainer: { marginTop: -40, marginLeft: 16, marginBottom: 12 },
   avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#fff' },
-  avatarFallback: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1a3c2e', borderWidth: 3, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  avatarFallback: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#0d723b', borderWidth: 3, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 32, color: '#fff', fontWeight: 'bold' },
   infoSection: { paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   fullName: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
@@ -196,7 +194,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: '#888', marginTop: 2 },
   filtersContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff' },
-  filterBtnActive: { backgroundColor: '#1a3c2e', borderColor: '#1a3c2e' },
+  filterBtnActive: { backgroundColor: '#0d723b', borderColor: '#0d723b' },
   filterText: { fontSize: 13, color: '#555' },
   filterTextActive: { color: '#fff', fontWeight: '600' },
   activitySection: { padding: 16 },
@@ -207,7 +205,7 @@ const styles = StyleSheet.create({
   gridItem: { width: '32%', aspectRatio: 1, borderRadius: 8, overflow: 'hidden', position: 'relative' },
   gridImage: { width: '100%', height: '100%' },
   gridPlaceholder: { width: '100%', height: '100%', backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
-  gridBadge: { position: 'absolute', bottom: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
+  gridBadge: { position: 'absolute', bottom: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#0d723b', justifyContent: 'center', alignItems: 'center' },
   empty: { alignItems: 'center', marginTop: 40, gap: 12 },
   emptyText: { color: '#999', fontSize: 15 },
 })

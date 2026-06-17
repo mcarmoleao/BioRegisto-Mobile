@@ -1,16 +1,6 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Image,
-  Switch,
-} from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, 
+  ScrollView, Alert, ActivityIndicator, Image, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -244,8 +234,8 @@ export default function Add() {
             style={[styles.photoBtn, styles.photoBtnOutline]}
             onPress={pickFromGallery}
           >
-            <Ionicons name="images-outline" size={20} color="#1a3c2e" />
-            <Text style={[styles.photoBtnText, { color: "#1a3c2e" }]}>
+            <Ionicons name="images-outline" size={20} color="#0d723b" />
+            <Text style={[styles.photoBtnText, { color: "#0d723b" }]}>
               Galeria
             </Text>
           </TouchableOpacity>
@@ -293,10 +283,10 @@ export default function Add() {
           disabled={loadingLocation}
         >
           {loadingLocation ? (
-            <ActivityIndicator size="small" color="#1a3c2e" />
+            <ActivityIndicator size="small" color="#0d723b" />
           ) : (
             <>
-              <Ionicons name="location-outline" size={20} color="#1a3c2e" />
+              <Ionicons name="location-outline" size={20} color="#0d723b" />
               <Text style={styles.locationBtnText}>
                 {location
                   ? locationName ||
@@ -323,7 +313,7 @@ export default function Add() {
       </View>
 
       {/* Observação pública */}
-      <View style={[styles.section, styles.switchRow]}>
+      {/*<View style={[styles.section, styles.switchRow]}>
         <View>
           <Text style={styles.label}>Observação pública</Text>
           <Text style={styles.hint}>Visível após validação</Text>
@@ -334,7 +324,7 @@ export default function Add() {
           trackColor={{ false: "#ddd", true: "#1a3c2e" }}
           thumbColor="#fff"
         />
-      </View>
+      </View>*/}
 
       {/* Submeter */}
       <TouchableOpacity
@@ -360,7 +350,7 @@ export default function Add() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   header: {paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#eee"},
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#1a3c2e" },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#0d723b" },
   section: {paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f0f0f0"},
   label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 },
   optional: { fontWeight: "400", color: "#999" },
@@ -370,20 +360,19 @@ const styles = StyleSheet.create({
   photosRow: { flexDirection: "row", marginBottom: 12 },
   photoThumb: {width: 80, height: 80, borderRadius: 8, marginRight: 8, position: "relative"},
   photoImage: { width: 80, height: 80, borderRadius: 8 },
-  primaryBadge: {position: "absolute", bottom: 4, left: 4, backgroundColor: "#1a3c2e", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4},
+  primaryBadge: {position: "absolute", bottom: 4, left: 4, backgroundColor: "#0d723b", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4},
   primaryBadgeText: { color: "#fff", fontSize: 9, fontWeight: "600" },
   removePhoto: { position: "absolute", top: -6, right: -6 },
   addPhotoBtn: {width: 80, height: 80, borderRadius: 8, borderWidth: 2, borderColor: "#ddd", borderStyle: "dashed", justifyContent: "center", alignItems: "center"},
   photoButtons: { flexDirection: "row", gap: 10 },
-  photoBtn: {flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#1a3c2e", borderRadius: 8, padding: 12, gap: 6},
-  photoBtnOutline: {backgroundColor: "#fff", borderWidth: 1, borderColor: "#1a3c2e"},
+  photoBtn: {flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#0d723b", borderRadius: 8, padding: 12, gap: 6},
+  photoBtnOutline: {backgroundColor: "#fff", borderWidth: 1, borderColor: "#0d723b"},
   photoBtnText: { color: "#fff", fontWeight: "600", fontSize: 14 },
   locationBtn: {flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, gap: 8},
   locationBtnText: { flex: 1, fontSize: 14, color: "#333" },
   dateBox: {flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, gap: 8},
   dateText: { fontSize: 14, color: "#333" },
-  switchRow: {flexDirection: "row", justifyContent: "space-between", alignItems: "center"},
-  submitBtn: {margin: 16, backgroundColor: "#1a3c2e", borderRadius: 10, padding: 16, alignItems: "center"},
+  submitBtn: {margin: 16, backgroundColor: "#0d723b", borderRadius: 10, padding: 16, alignItems: "center"},
   submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   submitHint: {textAlign: "center", fontSize: 12, color: "#999", marginTop: -8},
 });

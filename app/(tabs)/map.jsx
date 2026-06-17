@@ -6,13 +6,14 @@ import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'expo-router'
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 
 const FILTERS = ['Todas', 'Animais', 'Plantas', 'Fungos']
 const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FUNGI' }
 
 const STATUS_COLORS = {
-  VALIDATED: '#1a3c2e',
-  PENDING: '#b45309',
+  VALIDATED: '#0d723b',
+  PENDING: '#fdb924',
   REJECTED: '#dc2626',
 }
 
@@ -56,13 +57,20 @@ export default function Map() {
 
     if (!error && data) {
       const myObs = data.filter(o => o.user_id === user.id && o.latitude != null && o.longitude != null)
+      const ids = myObs.map(o => o.id)
+
+      const { data: photosData } = await supabase
+        .from('photos')
+        .select('observation_id, url, is_primary')
+        .in('observation_id', ids)
 
       const parsed = myObs.map(o => ({
         ...o,
         coords: { latitude: o.latitude, longitude: o.longitude },
         species: { scientific_name: o.scientific_name, common_name_pt: o.common_name_pt },
         user: { username: o.username, avatar_url: o.avatar_url },
-        photos: o.photo_url ? [{ url: o.photo_url, is_primary: true }] : [],
+        // Procura no array de fotos se há alguma para esta observação específica
+        photos: (photosData || []).filter(p => p.observation_id === o.id),
       }))
 
       setObservations(parsed)
@@ -150,7 +158,7 @@ export default function Map() {
             pinColor={STATUS_COLORS[obs.status] || '#888'}
           >
             <View style={[styles.pin, { backgroundColor: STATUS_COLORS[obs.status] || '#888' }]}>
-              <Ionicons name="leaf" size={14} color="#fff" />
+              <FontAwesome6 name="feather-pointed" size={14} color="#fff" />
             </View>
           </Marker>
         ))}
@@ -168,7 +176,7 @@ export default function Map() {
 
       {/* Botão recentrar */}
       <TouchableOpacity style={[styles.recenterBtn, { bottom: selected ? 200 : 90 }]} onPress={centerOnUser}>
-        <Ionicons name="locate" size={30} color="#1a3c2e" />
+        <Ionicons name="locate" size={30} color="#0d723b" />
       </TouchableOpacity>
 
       {/* Card de detalhe */}
@@ -217,7 +225,7 @@ export default function Map() {
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#1a3c2e" />
+          <ActivityIndicator size="large" color="#0d723b" />
         </View>
       )}
     </View>
@@ -230,19 +238,19 @@ const styles = StyleSheet.create({
   filtersContainer: { position: 'absolute', left: 0, right: 0, zIndex: 10, alignItems: 'center' },
   filters: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 20, padding: 4, gap: 4, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8 },
   filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
-  filterBtnActive: { backgroundColor: '#1a3c2e' },
+  filterBtnActive: { backgroundColor: '#0d723b' },
   filterText: { fontSize: 13, color: '#555' },
   filterTextActive: { color: '#fff', fontWeight: '600' },
   pin: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff', elevation: 3 },
-  legend: { position: 'absolute', bottom: 90, left: 16, backgroundColor: '#fff', borderRadius: 10, padding: 14, gap: 4, elevation: 3 },
+  legend: { position: 'absolute', bottom: 620, left: 16, backgroundColor: '#fff', borderRadius: 10, padding: 14, gap: 4, elevation: 3 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 10},
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontSize: 14, color: '#555' },
   recenterBtn: { position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 4 },
   card: { position: 'absolute', bottom: 80, left: 16, right: 16 },
   cardInner: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', elevation: 5 },
-  cardPhoto: { width: 90, height: 90 },
-  cardPhotoPlaceholder: { width: 90, height: 90, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  cardPhoto: { width: 100, height: 110 },
+  cardPhotoPlaceholder: { width: 90, height: 110, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
   cardContent: { flex: 1, padding: 10 },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   cardSpecies: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', flex: 1 },
@@ -252,8 +260,8 @@ const styles = StyleSheet.create({
   cardDate: { fontSize: 11, color: '#999', marginBottom: 6 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  avatar: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#0d723b', justifyContent: 'center', alignItems: 'center' },
   username: { fontSize: 12, color: '#555' },
-  detailLink: { fontSize: 12, color: '#1a3c2e', fontWeight: '600' },
+  detailLink: { fontSize: 14, color: '#0d723b', fontWeight: '600' },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff80' },
 })

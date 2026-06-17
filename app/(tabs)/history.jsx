@@ -8,8 +8,8 @@ import { useRouter } from 'expo-router'
 const TABS = ['Todas', 'Validadas', 'Pendentes', 'Rejeitadas']
 const STATUS_MAP = { 'Validadas': 'VALIDATED', 'Pendentes': 'PENDING', 'Rejeitadas': 'REJECTED' }
 const STATUS_CONFIG = {
-  VALIDATED: { label: 'VALIDADA', color: '#1a3c2e', bg: '#e8f5e9', icon: 'checkmark-circle' },
-  PENDING: { label: 'PENDENTE', color: '#a64d0a', bg: '#fef7da', icon: 'time' },
+  VALIDATED: { label: 'VALIDADA', color: '#0d723b', bg: '#e8f5e9', icon: 'checkmark-circle' },
+  PENDING: { label: 'PENDENTE', color: '#fdb924', bg: '#fff9e0', icon: 'time' },
   REJECTED: { label: 'REJEITADA', color: '#c41515', bg: '#fee2e2', icon: 'close-circle' },
 }
 
@@ -113,7 +113,7 @@ export default function History() {
       <Text style={styles.totalText}>Total {total}</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#1a3c2e" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#0d723b" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={observations}
@@ -135,10 +135,10 @@ export default function History() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff' },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a3c2e' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#0d723b' },
   tabsContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', gap: 8, marginBottom: 2 },
   tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff' },
-  tabActive: { backgroundColor: '#1a3c2e', borderColor: '#1a3c2e' },
+  tabActive: { backgroundColor: '#0d723b', borderColor: '#0d723b' },
   tabText: { fontSize: 13, color: '#555' },
   tabTextActive: { color: '#fff', fontWeight: '600' },
   totalText: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 13, fontWeight: 'bold', color: '#605f5f' },

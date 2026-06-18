@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'expo-router'
+import CustomAlert from '../_components/CustomAlert'
 
 const TABS = ['Todas', 'Validadas', 'Pendentes', 'Rejeitadas']
 const STATUS_MAP = { 'Validadas': 'VALIDATED', 'Pendentes': 'PENDING', 'Rejeitadas': 'REJECTED' }
@@ -21,11 +22,19 @@ export default function History() {
   const [activeTab, setActiveTab] = useState('Todas')
   const [total, setTotal] = useState(0)
 
+  // Estado para gerir o CustomAlert personalizado
+  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', buttons: [] })
+
   useEffect(() => { fetchObservations() }, [activeTab])
 
   async function fetchObservations() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      setLoading(false)
+      return
+    }
 
     let query = supabase
       .from('observations')
@@ -40,9 +49,16 @@ export default function History() {
     if (activeTab !== 'Todas') query = query.eq('status', STATUS_MAP[activeTab])
 
     const { data, error } = await query
-    if (!error) {
-      setObservations(data)
-      setTotal(data.length)
+    
+    if (error) {
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: 'Não foi possível carregar o teu histórico de observações.'
+      })
+    } else {
+      setObservations(data || [])
+      setTotal(data?.length || 0)
     }
     setLoading(false)
   }
@@ -61,11 +77,11 @@ export default function History() {
     const status = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING
 
     return (
-        <TouchableOpacity 
-          style={styles.card} 
-          activeOpacity={0.85}
-          onPress={() => router.push(`/observation/${item.id}`)}
-        >
+      <TouchableOpacity 
+        style={styles.card} 
+        activeOpacity={0.85}
+        onPress={() => router.push(`/observation/${item.id}`)}
+      >
         <View style={styles.photoContainer}>
           {photo ? (
             <Image source={{ uri: photo.url }} style={styles.photo} />
@@ -128,6 +144,15 @@ export default function History() {
           }
         />
       )}
+
+      {/* Alerta Customizado Global para o Ecrã */}
+      <CustomAlert 
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   )
 }
@@ -153,7 +178,6 @@ const styles = StyleSheet.create({
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20, gap: 3, marginLeft: 6 },
   statusText: { fontSize: 11, fontWeight: '600' },
   timeText: { fontSize: 11, color: '#999', marginBottom: 4 },
-  rejectionText: { fontSize: 11, color: '#c41515', fontStyle: 'italic', marginTop: 2 },
   empty: { alignItems: 'center', marginTop: 60, gap: 12 },
   emptyText: { color: '#999', fontSize: 15 },
 })

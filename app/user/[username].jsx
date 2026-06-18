@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, FlatList } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import CustomAlert from '../_components/CustomAlert' // Caminho exato para a tua estrutura!
 
 const FILTERS = ['Todas', 'Animais', 'Plantas', 'Fungos']
 const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FUNGI' }
@@ -18,6 +19,9 @@ export default function UserProfile() {
   const [stats, setStats] = useState({ total: 0, species: 0 })
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('Todas')
+
+  // Configuração do estado para o CustomAlert
+  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', buttons: [] })
 
   useEffect(() => { fetchProfile() }, [username])
   useEffect(() => { if (profile) fetchObservations() }, [profile, activeFilter])
@@ -56,13 +60,16 @@ export default function UserProfile() {
     const { data } = await query
 
     if (data) {
-      setObservations(data)
+      const filteredData = activeFilter !== 'Todas' 
+        ? data.filter(o => o.species?.kingdom === KINGDOM_MAP[activeFilter])
+        : data
 
-      // Contar espécies únicas
+      setObservations(filteredData)
+
       const uniqueSpecies = new Set(
-        data.filter(o => o.species?.scientific_name).map(o => o.species.scientific_name)
+        filteredData.filter(o => o.species?.scientific_name).map(o => o.species.scientific_name)
       )
-      setStats({ total: data.length, species: uniqueSpecies.size })
+      setStats({ total: filteredData.length, species: uniqueSpecies.size })
     }
     setLoading(false)
   }
@@ -171,6 +178,15 @@ export default function UserProfile() {
           )}
         </View>
       </ScrollView>
+
+      {/* Alerta Customizado Global do Ecrã */}
+      <CustomAlert 
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   )
 }

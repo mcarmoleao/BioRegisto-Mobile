@@ -1,24 +1,48 @@
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, Dimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../lib/supabase'
+import CustomAlert from '../_components/CustomAlert'
+
+
+const { width } = Dimensions.get('window')
 
 export default function Profile() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const params = useLocalSearchParams() // Captura os parâmetros passados na navegação
+  
   const [profile, setProfile] = useState(null)
   const [observations, setObservations] = useState([])
   const [stats, setStats] = useState({ total: 0, validated: 0, pending: 0, rejected: 0, species: 0 })
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('Todas')
 
+  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', buttons: [] })
+  
   const FILTERS = ['Todas', 'Animais', 'Plantas', 'Fungos']
   const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FUNGI' }
 
   useEffect(() => { fetchProfile() }, [])
   useEffect(() => { if (profile) fetchObservations() }, [profile, activeFilter])
+
+  // Escuta os parâmetros da rota para disparar o alerta de sucesso
+  useEffect(() => {
+    if (params?.updated === 'true') {
+      // Dispara o CustomAlert de sucesso
+      setAlertConfig({
+        visible: true,
+        title: 'Perfil Atualizado',
+        message: 'As tuas alterações foram guardadas com sucesso!',
+        buttons: [{ text: 'Excelente', style: 'default' }]
+      })
+      
+      // Limpa os parâmetros da URL para evitar que o alerta reapareça em re-renders futuros
+      router.setParams({ updated: null })
+    }
+  }, [params?.updated])
 
   async function fetchProfile() {
     setLoading(true)
@@ -66,7 +90,6 @@ export default function Profile() {
 
     const { data } = await query
     if (data) {
-      // Aplica o filtro localmente para evitar problemas de joins complexos no Supabase
       if (activeFilter !== 'Todas') {
         const filtered = data.filter(obs => obs.species?.kingdom === KINGDOM_MAP[activeFilter])
         setObservations(filtered)
@@ -77,15 +100,22 @@ export default function Profile() {
   }
 
   async function handleLogout() {
-    Alert.alert('Terminar sessão', 'Tens a certeza?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair', style: 'destructive', onPress: async () => {
-          await supabase.auth.signOut()
-          router.replace('/(auth)/login')
+    setAlertConfig({
+      visible: true,
+      title: 'Terminar sessão',
+      message: 'Tens a certeza que queres sair da tua conta?',
+      buttons: [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sair', 
+          style: 'destructive', 
+          onPress: async () => {
+            await supabase.auth.signOut()
+            router.replace('/(auth)/login')
+          }
         }
-      }
-    ])
+      ]
+    })
   }
 
   if (loading) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
@@ -162,7 +192,7 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* FILTROS DE CATEGORIA (Injetados aqui!) */}
+        {/* FILTROS DE CATEGORIA */}
         <View style={styles.filtersContainer}>
           {FILTERS.map(f => (
             <TouchableOpacity
@@ -218,9 +248,19 @@ export default function Profile() {
           )}
         </View>
       </ScrollView>
+
+        {/* O teu conteúdo normal... */}
+        <CustomAlert 
+          visible={alertConfig.visible}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          buttons={alertConfig.buttons}
+          onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+        />
     </View>
   )
 }
+
 
 const styles = StyleSheet.create({
   headerBg: { height: 100, backgroundColor: '#0d723b' },

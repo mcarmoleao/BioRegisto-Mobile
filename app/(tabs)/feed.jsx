@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert,
+  View, Text, FlatList, StyleSheet, TouchableOpacity, Image,
   TextInput, ActivityIndicator
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
 import { StatusBar } from 'expo-status-bar'
+import CustomAlert from '../_components/CustomAlert'
 
 const FILTERS = ['Todos', 'Animais', 'Plantas', 'Fungos']
 const KINGDOM_MAP = { 'Animais': 'ANIMALIA', 'Plantas': 'PLANTAE', 'Fungos': 'FUNGI' }
@@ -29,6 +30,9 @@ export default function Feed() {
   const [likeLoadingIds, setLikeLoadingIds] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   
+  // Estado para gerir os alertas premium
+  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', buttons: [] })
+
   // Histórico de observações clicadas localmente
   const [recentViews, setRecentViews] = useState([])
 
@@ -194,7 +198,11 @@ export default function Feed() {
       setObservations(prev => prev.map(obs => (
         obs.id === observation.id ? { ...obs, likes: previousLikes } : obs
       )))
-      Alert.alert('Erro', 'Não foi possível atualizar o like.')
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: 'Não foi possível atualizar o gosto na publicação.'
+      })
     }
 
     setLikeLoadingIds(prev => prev.filter(id => id !== observation.id))
@@ -519,6 +527,15 @@ export default function Feed() {
           </View>
         </TouchableOpacity>
       )}
+
+      {/* Injeção Global do CustomAlert */}
+      <CustomAlert 
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   )
 }

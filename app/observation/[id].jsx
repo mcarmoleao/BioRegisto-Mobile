@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Alert, ActivityIndicator, TextInput, Switch, Dimensions
+  Image, ActivityIndicator, TextInput, Switch, Dimensions
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -10,6 +10,7 @@ import MapView, { Marker } from 'react-native-maps'
 import * as ImagePicker from 'expo-image-picker'
 import * as FileSystem from 'expo-file-system/legacy'
 import { supabase } from '../../lib/supabase'
+import CustomAlert from '../_components/CustomAlert'
 
 const { width } = Dimensions.get('window')
 
@@ -27,7 +28,6 @@ export default function ObservationDetail() {
   const [observation, setObservation] = useState(null)
   const [photos, setPhotos] = useState([])
   const [species, setSpecies] = useState(null)
-  const [validator, setValidator] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -40,12 +40,15 @@ export default function ObservationDetail() {
   const [suggestedSpecies, setSuggestedSpecies] = useState('')
   const [isPublic, setIsPublic] = useState(true)
 
+  // Estado para controlar as configurações do Alerta Customizado
+  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', buttons: [] })
+
   useEffect(() => { fetchObservation() }, [id])
 
   async function fetchObservation() {
     setLoading(true)
 
-    const { data: obs, error: obsError } = await supabase
+    const { data: obs } = await supabase
       .from('observations_with_coords')
       .select('*')
       .eq('id', id)
@@ -102,8 +105,7 @@ export default function ObservationDetail() {
         .eq('observation_id', id)
         .in('action', ['VALIDATED', 'REJECTED'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+        .maybeSingle()
       setAudit(auditData)
     }
 
@@ -115,7 +117,7 @@ export default function ObservationDetail() {
 
     const { data: likesData } = await supabase
       .from('likes')
-      .select('id, created_at, user:user_id (username, avatar_url, full_name)')
+      .select('created_at, user:user_id (username, avatar_url, full_name)')
       .eq('observation_id', id)
       .order('created_at', { ascending: false })
 
@@ -124,77 +126,250 @@ export default function ObservationDetail() {
     setLoading(false)
   }
 
-  async function handleSave() {
+  async function pickFromGallery() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') return
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 })
+    if (!result.canceled) {
+      handleUploadAndInsert(result.assets[0].uri)
+    }
+  }
+
+  async function pickFromCamera() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync()
+    if (status !== 'granted') return
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 })
+    if (!result.canceled) {
+      handleUploadAndInsert(result.assets[0].uri)
+    }
+  }
+
+  async function handleUploadAndInsert(uri) {
     setSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const ext = uri.split('.').pop().toLowerCase().split('?')[0]
+      const path = `${user.id}/${id}/${Date.now()}.${ext}`
+      
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' })
+      const byteCharacters = atob(base64)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i)
+      const byteArray = new Uint8Array(byteNumbers)
+      
+      const { error: uploadError } = await supabase.storage.from('fotosEspecie').upload(path, byteArray, { contentType: `image/${ext}`, upsert: true })
+      if (uploadError) throw uploadError
+      
+      const { data: { publicUrl } } = supabase.storage.from('fotosEspecie').getPublicUrl(path)
+      
+      await supabase.from('photos').insert({ 
+        observation_id: id, 
+        storage_path: path, 
+        url: publicUrl, 
+        is_primary: photos.length === 0, 
+        order_index: photos.length 
+      })
+      
+      const { data: newPhotos } = await supabase.from('photos').select('*').eq('observation_id', id).order('order_index')
+      if (newPhotos) {
+        setPhotos(newPhotos)
+        setActivePhoto(newPhotos.length - 1)
+      }
+    } catch (e) { 
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: e.message,
+        buttons: [{ text: 'OK' }]
+      })
+    }
+    setSaving(false)
+  }
+
+  async function deletePhoto(photo, index) {
+    setAlertConfig({
+      visible: true,
+      title: 'Eliminar foto',
+      message: 'Tens a certeza que queres remover esta imagem?',
+      buttons: [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Apagar',
+          style: 'destructive',
+          onPress: async () => {
+            setSaving(true)
+            try {
+              const { error: storageError } = await supabase.storage
+                .from('fotosEspecie')
+                .remove([photo.storage_path])
+
+              if (storageError) console.log("Aviso Storage:", storageError.message)
+
+              const { error: dbError } = await supabase
+                .from('photos')
+                .delete()
+                .eq('storage_path', photo.storage_path)
+
+              if (dbError) throw dbError
+
+              const { data: remainingPhotos } = await supabase
+                .from('photos')
+                .select('*')
+                .eq('observation_id', id)
+                .order('order_index')
+                
+              let updatedPhotos = remainingPhotos || []
+
+              if (photo.is_primary && updatedPhotos.length > 0) {
+                const nextPrimaryPath = updatedPhotos[0].storage_path
+                
+                const { error: updateError } = await supabase
+                  .from('photos')
+                  .update({ is_primary: true })
+                  .eq('storage_path', nextPrimaryPath)
+
+                if (!updateError) {
+                  updatedPhotos[0].is_primary = true
+                }
+              }
+
+              if (activePhoto >= updatedPhotos.length) {
+                setActivePhoto(Math.max(0, updatedPhotos.length - 1))
+              } else if (activePhoto === index) {
+                setActivePhoto(0)
+              }
+              
+              setPhotos(updatedPhotos)
+              
+              setAlertConfig({
+                visible: true,
+                title: 'Sucesso',
+                message: 'Foto removida com sucesso.',
+                buttons: [{ text: 'OK' }]
+              })
+            } catch (e) {
+              setAlertConfig({
+                visible: true,
+                title: 'Erro ao eliminar',
+                message: e.message,
+                buttons: [{ text: 'OK' }]
+              })
+            }
+            setSaving(false)
+          }
+        }
+      ]
+    })
+  }
+
+  async function handleSave() {
+    if (!description.trim()) {
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: 'A descrição é obrigatória.',
+        buttons: [{ text: 'OK' }]
+      })
+      return
+    }
+    if (photos.length === 0) {
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: 'Precisas de incluir pelo menos 1 fotografia para validação.',
+        buttons: [{ text: 'OK' }]
+      })
+      return
+    }
+
+    setSaving(true)
+    const nextStatus = observation.status === 'REJECTED' ? 'PENDING' : observation.status
+
     const { error } = await supabase
       .from('observations')
       .update({
         description: description.trim(),
         suggested_species: suggestedSpecies.trim() || null,
         is_public: isPublic,
+        status: nextStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
 
-    if (error) Alert.alert('Erro', error.message)
-    else { setEditing(false); fetchObservation(); Alert.alert('Sucesso', 'Observação atualizada!') }
+    if (error) {
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: error.message,
+        buttons: [{ text: 'OK' }]
+      })
+    } else { 
+      setEditing(false)
+      fetchObservation() 
+      setAlertConfig({
+        visible: true,
+        title: 'Sucesso',
+        message: observation.status === 'REJECTED' 
+          ? 'Observação re-enviada para avaliação com sucesso!' 
+          : 'Observação atualizada!',
+        buttons: [{ text: 'Excelente' }]
+      })
+    }
     setSaving(false)
   }
 
   async function handleDelete() {
-    Alert.alert('Apagar observação', 'Tens a certeza? Esta ação não pode ser revertida.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Apagar', style: 'destructive', onPress: async () => {
-          for (const photo of photos) {
-            await supabase.storage.from('fotosEspecie').remove([photo.storage_path])
+    setAlertConfig({
+      visible: true,
+      title: 'Eliminar observação',
+      message: 'Tens a certeza? Esta ação vai eliminar permanentemente a observação e todo o seu histórico.',
+      buttons: [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Apagar', 
+          style: 'destructive', 
+          onPress: async () => {
+            setSaving(true)
+            try {
+              await supabase
+                .from('observation_audit')
+                .delete()
+                .eq('observation_id', id)
+
+              for (const photo of photos) {
+                await supabase.storage.from('fotosEspecie').remove([photo.storage_path])
+              }
+              await supabase.from('photos').delete().eq('observation_id', id)
+
+              await supabase.from('likes').delete().eq('observation_id', id)
+              await supabase.from('comments').delete().eq('observation_id', id)
+
+              const { error } = await supabase
+                .from('observations')
+                .delete()
+                .eq('id', id)
+
+              if (error) throw error
+
+              setAlertConfig({
+                visible: true,
+                title: 'Sucesso',
+                message: 'Observação eliminada com sucesso.',
+                buttons: [{ text: 'OK', onPress: () => router.back() }]
+              })
+            } catch (error) {
+              setAlertConfig({
+                visible: true,
+                title: 'Erro ao eliminar',
+                message: error.message,
+                buttons: [{ text: 'OK' }]
+              })
+            }
+            setSaving(false)
           }
-          await supabase.from('photos').delete().eq('observation_id', id)
-          const { error } = await supabase.from('observations').delete().eq('id', id)
-          if (error) Alert.alert('Erro', error.message)
-          else router.back()
         }
-      }
-    ])
-  }
-
-  async function addPhoto() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (status !== 'granted') return
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 })
-    if (!result.canceled) {
-      setSaving(true)
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        const uri = result.assets[0].uri
-        const ext = uri.split('.').pop().toLowerCase().split('?')[0]
-        const path = `${user.id}/${id}/${Date.now()}.${ext}`
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' })
-        const byteCharacters = atob(base64)
-        const byteNumbers = new Array(byteCharacters.length)
-        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i)
-        const byteArray = new Uint8Array(byteNumbers)
-        const { error: uploadError } = await supabase.storage.from('fotosEspecie').upload(path, byteArray, { contentType: `image/${ext}`, upsert: true })
-        if (uploadError) throw uploadError
-        const { data: { publicUrl } } = supabase.storage.from('fotosEspecie').getPublicUrl(path)
-        await supabase.from('photos').insert({ observation_id: id, storage_path: path, url: publicUrl, is_primary: photos.length === 0, order_index: photos.length })
-        fetchObservation()
-      } catch (e) { Alert.alert('Erro', e.message) }
-      setSaving(false)
-    }
-  }
-
-  async function deletePhoto(photo) {
-    Alert.alert('Apagar foto', 'Tens a certeza?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Apagar', style: 'destructive', onPress: async () => {
-          await supabase.storage.from('fotosEspecie').remove([photo.storage_path])
-          await supabase.from('photos').delete().eq('id', photo.id)
-          fetchObservation()
-        }
-      }
-    ])
+      ]
+    })
   }
 
   if (loading) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
@@ -202,10 +377,7 @@ export default function ObservationDetail() {
 
   const status = STATUS_CONFIG[observation.status] || STATUS_CONFIG.PENDING
   const canEdit = observation.status === 'PENDING' || observation.status === 'REJECTED'
-  const primaryPhoto = photos.find(p => p.is_primary) || photos[0]
   const speciesName = species?.scientific_name || observation.suggested_species || 'A confirmar...'
-
-  // Parse location from WKB — use lat/lng if available from view
   const hasLocation = observation.latitude != null && observation.longitude != null
 
   return (
@@ -215,10 +387,22 @@ export default function ObservationDetail() {
         {/* Foto principal grande */}
         <View style={styles.heroContainer}>
           {photos[activePhoto] ? (
-            <Image source={{ uri: photos[activePhoto].url }} style={styles.heroImage} />
+            <View style={{ width: '100%', height: '100%' }}>
+              <Image source={{ uri: photos[activePhoto].url }} style={styles.heroImage} />
+              {editing && (
+                <TouchableOpacity 
+                  style={styles.deletePhotoOverlay} 
+                  onPress={() => deletePhoto(photos[activePhoto], activePhoto)}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Remover foto</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : (
             <View style={styles.heroPlaceholder}>
               <Ionicons name="image-outline" size={60} color="#ccc" />
+              {editing && <Text style={{ color: '#999', marginTop: 8 }}>Adiciona fotos abaixo</Text>}
             </View>
           )}
 
@@ -235,25 +419,44 @@ export default function ObservationDetail() {
           </View>
 
           {/* Badge status */}
-          <View style={[styles.heroBadge, { backgroundColor: status.bg }]}>
-            <Ionicons name={status.icon} size={12} color={status.color} />
-            <Text style={[styles.heroBadgeText, { color: status.color }]}>{status.label}</Text>
-          </View>
+          {!editing && (
+            <View style={[styles.heroBadge, { backgroundColor: status.bg }]}>
+              <Ionicons name={status.icon} size={12} color={status.color} />
+              <Text style={[styles.heroBadgeText, { color: status.color }]}>{status.label}</Text>
+            </View>
+          )}
+        </View>
 
-          {/* Thumbnails */}
-          {photos.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbsRow} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
-              {photos.map((p, i) => (
-                <TouchableOpacity key={p.id} onPress={() => setActivePhoto(i)}>
-                  <Image source={{ uri: p.url }} style={[styles.thumb, activePhoto === i && styles.thumbActive]} />
-                </TouchableOpacity>
-              ))}
-              {canEdit && editing && (
-                <TouchableOpacity style={styles.addThumb} onPress={addPhoto}>
-                  <Ionicons name="add" size={20} color="#999" />
-                </TouchableOpacity>
-              )}
-            </ScrollView>
+        {/* Linha de Miniaturas e Botões */}
+        <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+            {photos.map((p, i) => (
+              <TouchableOpacity key={p.id} onPress={() => setActivePhoto(i)} style={{ position: 'relative' }}>
+                <Image source={{ uri: p.url }} style={[styles.thumb, activePhoto === i && styles.thumbActive]} />
+                {i === 0 && (
+                  <View style={styles.miniPrimaryBadge}><Text style={{ color: '#fff', fontSize: 7 }}>★</Text></View>
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            {editing && photos.length < 5 && (
+              <TouchableOpacity style={styles.addThumb} onPress={pickFromGallery}>
+                <Ionicons name="add" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+
+          {editing && (
+            <View style={styles.photoActionRow}>
+              <TouchableOpacity style={styles.miniPhotoBtn} onPress={pickFromCamera}>
+                <Ionicons name="camera-outline" size={16} color="#fff" />
+                <Text style={styles.miniPhotoBtnText}>Câmara</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.miniPhotoBtn, styles.miniPhotoBtnOutline]} onPress={pickFromGallery}>
+                <Ionicons name="images-outline" size={16} color="#1a3c2e" />
+                <Text style={[styles.miniPhotoBtnText, { color: '#1a3c2e' }]}>Galeria</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -269,6 +472,30 @@ export default function ObservationDetail() {
           </View>
         </View>
 
+        {/* Avaliação do Técnico */}
+        {(observation.status === 'VALIDATED' || observation.status === 'REJECTED') && audit && (
+          <View style={[styles.section, { backgroundColor: observation.status === 'VALIDATED' ? '#f4f9f4' : '#fff5f5' }]}>
+            <Text style={styles.sectionLabel}>Avaliação Técnico ({status.label})</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <View style={[styles.validatedAvatar, { backgroundColor: status.color }]}>
+                <Ionicons name="person" size={14} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.validatedText}>
+                  {observation.status === 'VALIDATED' ? 'Validada' : 'Rejeitada'} por: <Text style={{ fontWeight: 'bold' }}>{audit.technician?.full_name || audit.technician?.username || 'Técnico'}</Text>
+                </Text>
+                <Text style={styles.validatedDate}>Em {new Date(audit.created_at).toLocaleDateString('pt-PT')}</Text>
+              </View>
+            </View>
+            {observation.status === 'REJECTED' && audit.rejection_reason && (
+              <View style={styles.rejectionBox}>
+                <Ionicons name="information-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.rejectionText}><Text style={{ fontWeight: '700' }}>Motivo: </Text>{audit.rejection_reason}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Descrição */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Descrição</Text>
@@ -278,20 +505,9 @@ export default function ObservationDetail() {
             <Text style={styles.sectionValue}>{observation.description}</Text>
           )}
         </View>
-        
-        {/*Motivo rejeição*/}
-        {observation.status === 'REJECTED' && audit?.rejection_reason && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Motivo de rejeição</Text>
-            <View style={styles.rejectionBox}>
-              <Ionicons name="information-circle-outline" size={16} color="#dc2626" />
-              <Text style={styles.rejectionText}>{audit.rejection_reason}</Text>
-            </View>
-          </View>
-        )}
 
-        {/* Espécie sugerida — só se não tiver espécie confirmada */}
-        {!species && (
+        {/* Espécie sugerida */}
+        {(!species || editing) && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Espécie sugerida</Text>
             {editing ? (
@@ -303,36 +519,32 @@ export default function ObservationDetail() {
         )}
 
         {/* Classificação taxonómica */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Classificação Taxonómica</Text>
-          {species ? (
-            <View style={styles.taxGrid}>
-              {[
-                ['Filo', species.genus?.family?.order?.class?.phylum?.name],
-                ['Classe', species.genus?.family?.order?.class?.name],
-                ['Ordem', species.genus?.family?.order?.name],
-                ['Família', species.genus?.family?.name],
-                ['Género', species.genus?.name],
-              ].filter(([_, val]) => val).map(([label, value]) => (
-                <View key={label} style={styles.taxItem}>
-                  <Text style={styles.taxLabel}>{label}</Text>
-                  <Text style={styles.taxValue}>{value}</Text>
-                </View>
-              ))}
-              {species.scientific_name && (
-                <View style={[styles.taxItem, { width: '100%' }]}>
-                  <Text style={styles.taxLabel}>Nome científico</Text>
-                  <Text style={[styles.taxValue, { fontStyle: 'italic' }]}>{species.scientific_name}</Text>
-                </View>
-              )}
-            </View>
+        {!editing && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Classificação Taxonómica</Text>
+            {species ? (
+              <View style={styles.taxGrid}>
+                {[
+                  ['Filo', species.genus?.family?.order?.class?.phylum?.name],
+                  ['Classe', species.genus?.family?.order?.class?.name],
+                  ['Ordem', species.genus?.family?.order?.name],
+                  ['Família', species.genus?.family?.name],
+                  ['Género', species.genus?.name],
+                ].filter(([_, val]) => val).map(([label, value]) => (
+                  <View key={label} style={styles.taxItem}>
+                    <Text style={styles.taxLabel}>{label}</Text>
+                    <Text style={styles.taxValue}>{value}</Text>
+                  </View>
+                ))}
+              </View>
             ) : (
-            <View style={styles.taxPending}>
-              <Ionicons name="time-outline" size={24} color="#ccc" />
-              <Text style={styles.taxPendingText}>Aguarda validação por um técnico</Text>
-            </View>
-          )}
-        </View>
+              <View style={styles.taxPending}>
+                <Ionicons name="time-outline" size={24} color="#ccc" />
+                <Text style={styles.taxPendingText}>Aguarda validação por um técnico</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Localização */}
         <View style={styles.section}>
@@ -361,30 +573,6 @@ export default function ObservationDetail() {
           )}
         </View>
 
-        {/* Comentários */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Comentários</Text>
-          {comments.length === 0 ? (
-            <Text style={styles.noValue}>Ainda sem comentários</Text>
-          ) : (
-            comments.map(comment => (
-              <View key={comment.id} style={styles.commentItem}>
-                <View style={styles.commentAvatar}>
-                  {comment.user?.avatar_url ? (
-                    <Image source={{ uri: comment.user.avatar_url }} style={styles.commentAvatarImage} />
-                  ) : (
-                    <Ionicons name="person" size={12} color="#fff" />
-                  )}
-                </View>
-                <View style={styles.commentBody}>
-                  <Text style={styles.commentAuthor}>{comment.user?.full_name || comment.user?.username || 'utilizador'}</Text>
-                  <Text style={styles.commentText}>{comment.content}</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
         {/* Likes */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Gostos</Text>
@@ -392,8 +580,8 @@ export default function ObservationDetail() {
             <Text style={styles.noValue}>Ainda sem likes</Text>
           ) : (
             <View style={styles.likesRow}>
-              {likes.map(like => (
-                <View key={like.id} style={styles.likeAvatar}>
+              {likes.map((like, index) => (
+                <View key={like.user?.id || index} style={styles.likeAvatar}>
                   {like.user?.avatar_url ? (
                     <Image source={{ uri: like.user.avatar_url }} style={styles.likeAvatarImage} />
                   ) : (
@@ -405,51 +593,17 @@ export default function ObservationDetail() {
           )}
         </View>
 
-        {/* Observação pública */}
-        {/*<View style={[styles.section, styles.switchRow]}>
-          <View>
-            <Text style={styles.sectionLabel}>Observação pública</Text>
-            <Text style={styles.sectionValueSmall}>Visível após validação</Text>
-          </View>
-          <Switch
-            value={isPublic}
-            onValueChange={async (val) => {
-              setIsPublic(val)
-              if (!editing) {
-                await supabase.from('observations').update({ is_public: val }).eq('id', id)
-              }
-            }}
-            trackColor={{ false: '#ddd', true: '#1a3c2e' }}
-            thumbColor="#fff"
-          />
-        </View>*/}
-
-        {/* Validado por */}
-        {(observation.status === 'VALIDATED' || observation.status === 'REJECTED') && audit && (
-          <View style={styles.validatedBy}>
-            <View style={styles.validatedAvatar}>
-              <Ionicons name="person" size={14} color="#fff" />
-            </View>
-            <View>
-              <Text style={styles.validatedText}>
-                {observation.status === 'VALIDATED' ? 'Validado' : 'Rejeitado'} por {audit.technician?.full_name || audit.technician?.username}
-              </Text>
-              <Text style={styles.validatedDate}>
-                {new Date(audit.created_at).toLocaleDateString('pt-PT')}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Botões */}
+        {/* Botões de Ação */}
         {canEdit && (
           <View style={styles.actions}>
             {editing ? (
               <>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Guardar alterações</Text>}
+                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>
+                    {observation.status === 'REJECTED' ? 'Submeter para Nova Avaliação' : 'Guardar alterações'}
+                  </Text>}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditing(false); fetchObservation() }}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditing(false); fetchObservation() }} disabled={saving}>
                   <Text style={styles.cancelBtnText}>Cancelar</Text>
                 </TouchableOpacity>
               </>
@@ -462,6 +616,15 @@ export default function ObservationDetail() {
           </View>
         )}
       </ScrollView>
+
+      {/* Alerta Customizado Centralizado para todo o ecrã */}
+      <CustomAlert 
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   )
 }
@@ -470,17 +633,22 @@ const styles = StyleSheet.create({
   heroContainer: { width, height: 280, backgroundColor: '#f0f0f0', position: 'relative' },
   heroImage: { width: '100%', height: '100%' },
   heroPlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' },
-  headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
+  headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8, zIndex: 10 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  heroBadge: { position: 'absolute', bottom: 20, left: 300, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  heroBadge: { position: 'absolute', bottom: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   heroBadgeText: { fontSize: 12, fontWeight: '600' },
-  thumbsRow: { position: 'absolute', bottom: 8, left: 0, right: 0 },
-  thumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 2, borderColor: 'transparent' },
-  thumbActive: { borderColor: '#fff' },
-  rejectionBox: { flexDirection: 'row', gap: 8, backgroundColor: '#fee2e2', padding: 12, borderRadius: 8, alignItems: 'flex-start' },
+  thumb: { width: 50, height: 50, borderRadius: 6, borderWidth: 2, borderColor: '#eee' },
+  thumbActive: { borderColor: '#1a3c2e' },
+  miniPrimaryBadge: { position: 'absolute', bottom: 2, left: 2, backgroundColor: '#1a3c2e', width: 12, height: 12, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
+  deletePhotoOverlay: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(220,38,38,0.85)', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  addThumb: { width: 50, height: 50, borderRadius: 6, borderWidth: 2, borderColor: '#ccc', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fafafa' },
+  photoActionRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 10 },
+  miniPhotoBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a3c2e', borderRadius: 6, padding: 8, gap: 6 },
+  miniPhotoBtnOutline: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#1a3c2e' },
+  miniPhotoBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  rejectionBox: { flexDirection: 'row', gap: 8, backgroundColor: '#fee2e2', padding: 12, borderRadius: 8, alignItems: 'flex-start', marginTop: 8 },
   rejectionText: { flex: 1, fontSize: 14, color: '#dc2626', lineHeight: 20 },
-  addThumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 2, borderColor: '#fff', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   infoSection: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   speciesName: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
   commonName: { fontSize: 15, color: '#666', marginBottom: 8 },
@@ -489,7 +657,6 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   sectionLabel: { fontSize: 12, color: '#888', marginBottom: 8, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   sectionValue: { fontSize: 15, color: '#333', lineHeight: 22 },
-  sectionValueSmall: { fontSize: 12, color: '#999', marginTop: 2 },
   noValue: { color: '#bbb', fontStyle: 'italic', fontSize: 14 },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 14, color: '#333' },
   textArea: { height: 100, textAlignVertical: 'top' },
@@ -501,17 +668,11 @@ const styles = StyleSheet.create({
   taxPendingText: { fontSize: 13, color: '#bbb' },
   miniMap: { height: 140, borderRadius: 10, marginBottom: 8 },
   coordsText: { fontSize: 12, color: '#888' },
-  commentItem: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
-  commentAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  commentAvatarImage: { width: '100%', height: '100%' },
-  commentBody: { flex: 1 },
-  commentAuthor: { fontSize: 13, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 },
-  commentText: { fontSize: 14, color: '#333', lineHeight: 20 },
   likesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   likeAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   likeAvatarImage: { width: '100%', height: '100%' },
   validatedBy: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  validatedAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center' },
+  validatedAvatar: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   validatedText: { fontSize: 13, color: '#555' },
   validatedDate: { fontSize: 11, color: '#aaa', marginTop: 2 },
   actions: { padding: 16, gap: 10 },

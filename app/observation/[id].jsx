@@ -98,15 +98,22 @@ export default function ObservationDetail() {
     if (obs?.status === 'VALIDATED' || obs?.status === 'REJECTED') {
       const { data: auditData } = await supabase
         .from('observation_audit')
-        .select(`
-          action, created_at, rejection_reason,
-          technician:user_id (username, full_name)
-        `)
+        .select('action, created_at, rejection_reason, user_id')
         .eq('observation_id', id)
         .in('action', ['VALIDATED', 'REJECTED'])
         .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle()
-      setAudit(auditData)
+
+      if (auditData) {
+        const { data: techProfile } = await supabase
+          .from('profiles')
+          .select('username, full_name')
+          .eq('id', auditData.user_id)
+          .single()
+
+        setAudit({ ...auditData, technician: techProfile })
+      }
     }
 
     const { data: commentsData } = await supabase
@@ -374,6 +381,9 @@ export default function ObservationDetail() {
 
   if (loading) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
   if (!observation) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
+
+  console.log('audit:', JSON.stringify(audit))
+  console.log('observation status:', observation?.status)
 
   const status = STATUS_CONFIG[observation.status] || STATUS_CONFIG.PENDING
   const canEdit = observation.status === 'PENDING' || observation.status === 'REJECTED'

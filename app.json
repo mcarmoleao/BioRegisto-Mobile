@@ -20,7 +20,8 @@
         "foregroundImage": "./assets/iconBio.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "bio.registo"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -29,6 +30,12 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "bioregisto"
+    "scheme": "bioregisto",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "78071591-3e40-41d3-a7bf-0e8fac42c597"
+      }
+    }
   }
 }

@@ -332,10 +332,6 @@ export default function Feed() {
               <Ionicons name="leaf-outline" size={48} color="#ccc" />
             )}
           </View>
-          <View style={styles.cardBadge}>
-            <Ionicons name="checkmark-circle" size={14} color="#fff" />
-            <Text style={styles.cardBadgeText}>Validada</Text>
-          </View>
           <View style={styles.cardBody}>
             <View style={styles.cardHeader}>
               <View style={{ flex: 1 }}>
@@ -569,8 +565,6 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 12, marginHorizontal: 16, marginBottom: 16, overflow: 'hidden', elevation: 2 },
   imagePlaceholder: { height: 200, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
   cardImage: { width: '100%', height: '100%' },
-  cardBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d723b', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 4 },
-  cardBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   cardBody: { padding: 12 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
   speciesName: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a' },

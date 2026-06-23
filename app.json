@@ -34,7 +34,9 @@
         {
           "locationWhenInUsePermission": "Permite ao BioRegisto aceder à tua localização para mostrar as observações no mapa."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store"
     ],
     "scheme": "bioregisto",
     "extra": {

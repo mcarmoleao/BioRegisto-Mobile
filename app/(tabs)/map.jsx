@@ -39,21 +39,31 @@ export default function Map() {
   const [showAllUsers, setShowAllUsers] = useState(false) // false = As minhas, true = Gerais
   const [taxSearch, setTaxSearch] = useState('') 
   const [appliedTaxFilter, setAppliedTaxFilter] = useState('') 
+  
+  // Árvore taxonómica carregada via Supabase para pesquisa profunda
+  const [taxonomy, setTaxonomy] = useState([])
 
   useEffect(() => {
     fetchObservations()
     getUserLocation()
+    fetchTaxonomy()
   }, [activeFilter])
 
   useEffect(() => {
     applyLocalFilters()
-  }, [observations, showAllUsers, appliedTaxFilter])
+  }, [observations, showAllUsers, appliedTaxFilter, taxonomy])
 
   async function getUserLocation() {
     const { status } = await Location.requestForegroundPermissionsAsync()
     if (status !== 'granted') return
     const loc = await Location.getCurrentPositionAsync({})
     setUserLocation(loc.coords)
+  }
+
+  // Carrega a tabela de correspondência taxonómica flat do Supabase
+  async function fetchTaxonomy() {
+    const { data } = await supabase.rpc('get_taxonomy_options')
+    if (data) setTaxonomy(data)
   }
 
   async function fetchObservations() {
@@ -99,22 +109,35 @@ export default function Map() {
       result = result.filter(o => o.user_id === user.id)
     }
 
-    // 2. Filtro da Árvore Taxonómica Remediado
+    // 2. Filtro da Árvore Taxonómica Otimizado Globalmente
     if (appliedTaxFilter.trim()) {
       const searchTxt = appliedTaxFilter.toLowerCase().trim()
+      
       result = result.filter(o => {
-        const scientificName = o.scientific_name || o.suggested_species || ""
-        const derivedGenus = scientificName.split(" ")[0] || ""
+        const commonName = o.species?.common_name_pt?.toLowerCase() || ''
+        const scientificName = o.species?.scientific_name?.toLowerCase() || ''
+        const suggested = o.suggested_species?.toLowerCase() || ''
+        
+        // Match direto básico
+        if (commonName.includes(searchTxt) || scientificName.includes(searchTxt) || suggested.includes(searchTxt)) {
+          return true
+        }
 
-        return (
-          scientificName.toLowerCase().includes(searchTxt) ||
-          derivedGenus.toLowerCase().includes(searchTxt) ||
-          o.common_name_pt?.toLowerCase().includes(searchTxt) ||
-          o.filo?.toLowerCase().includes(searchTxt) ||
-          o.classe?.toLowerCase().includes(searchTxt) ||
-          o.ordem?.toLowerCase().includes(searchTxt) ||
-          o.familia?.toLowerCase().includes(searchTxt)
-        )
+        // Match profundo na hierarquia vinda da base de dados
+        if (o.species_id && taxonomy.length > 0) {
+          const taxMatch = taxonomy.find(t => t.species_id === o.species_id)
+          if (taxMatch) {
+            return (
+              (taxMatch.phylum_name && taxMatch.phylum_name.toLowerCase().includes(searchTxt)) ||
+              (taxMatch.class_name && taxMatch.class_name.toLowerCase().includes(searchTxt)) ||
+              (taxMatch.order_name && taxMatch.order_name.toLowerCase().includes(searchTxt)) ||
+              (taxMatch.family_name && taxMatch.family_name.toLowerCase().includes(searchTxt)) ||
+              (taxMatch.genus_name && taxMatch.genus_name.toLowerCase().includes(searchTxt))
+            )
+          }
+        }
+
+        return false
       })
     }
 
@@ -126,6 +149,7 @@ export default function Map() {
     setSelected(null)
   }
 
+  // Limpa o input de pesquisa e o filtro ativo
   function handleClearTaxonomy() {
     setTaxSearch('')
     setAppliedTaxFilter('')
@@ -163,7 +187,7 @@ export default function Map() {
         <View style={styles.searchBar}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Pesquisar Espécie, Género ou Nome Comum..."
+            placeholder="Pesquisar Espécie, Género, Família..."
             value={taxSearch}
             onChangeText={setTaxSearch}
             placeholderTextColor="#999"
@@ -229,7 +253,7 @@ export default function Map() {
         </View>
       )}
 
-      {/* O Switch (Direita) - Totalmente independente agora! */}
+      {/* O Switch (Direita) */}
       <View style={styles.switchRow}>
         <Text style={[styles.switchLabel, !showAllUsers && styles.switchLabelActive]}>As minhas</Text>
         <Switch

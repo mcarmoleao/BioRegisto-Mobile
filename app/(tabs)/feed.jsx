@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, Image,
-  TextInput, ActivityIndicator
+  TextInput, ActivityIndicator, ScrollView
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
@@ -20,6 +20,7 @@ export default function Feed() {
   const insets = useSafeAreaInsets()
   const [currentUsername, setCurrentUsername] = useState(null)
   const [observations, setObservations] = useState([])
+  
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('Todos')
@@ -36,10 +37,13 @@ export default function Feed() {
   // Histórico de observações clicadas localmente
   const [recentViews, setRecentViews] = useState([])
 
-  // Filtros Globais (os ativos na listagem)
+  // Filtros Globais
   const [dateFilter, setDateFilter] = useState(null)
   const [sortBy, setSortBy] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
+  
+  // Opções taxonómicas completas trazidas da tua função get_taxonomy_options()
+  const [taxonomy, setTaxonomy] = useState([])
 
   // Estados temporários para o Modal
   const [tempDateFilter, setTempDateFilter] = useState(null)
@@ -56,17 +60,17 @@ export default function Feed() {
   useEffect(() => {
     fetchObservations()
     fetchUnreadCount()
+    fetchTaxonomy()
   }, [activeFilter])  
 
   useFocusEffect(
     useCallback(() => {
       fetchObservations()
       fetchUnreadCount()
-      loadRecentViews() // Atualiza a lista de cliques locais ao voltar para o feed
+      loadRecentViews()
     }, [activeFilter])
   )
 
-  // Função para carregar os cliques guardados no AsyncStorage
   async function loadRecentViews() {
     try {
       const jsonValue = await AsyncStorage.getItem(RECENT_VIEWS_KEY)
@@ -78,17 +82,20 @@ export default function Feed() {
     }
   }
 
-  // Função chamada ao clicar num card para registar o clique com o timestamp atual
+  // Carrega a árvore taxonómica plana do Supabase
+  async function fetchTaxonomy() {
+    const { data } = await supabase.rpc('get_taxonomy_options')
+    if (data) setTaxonomy(data)
+  }
+
   async function handleOpenObservation(observationId) {
     try {
       const jsonValue = await AsyncStorage.getItem(RECENT_VIEWS_KEY)
       let currentViews = jsonValue ? JSON.parse(jsonValue) : []
       
-      // Remove se já existia para não duplicar e insere no topo com a hora atual
       currentViews = currentViews.filter(item => item.id !== observationId)
       currentViews.unshift({ id: observationId, viewedAt: Date.now() })
       
-      // Guarda apenas os últimos 50 cliques para poupar espaço
       if (currentViews.length > 50) {
         currentViews = currentViews.slice(0, 50)
       }
@@ -99,7 +106,6 @@ export default function Feed() {
       console.error('Erro ao guardar visto recentemente:', e)
     }
 
-    // Navega para o detalhe
     router.push(`/observation/${observationId}`)
   }
 
@@ -183,14 +189,8 @@ export default function Feed() {
     }))
 
     const query = alreadyLiked
-      ? supabase
-        .from('likes')
-        .delete()
-        .eq('observation_id', observation.id)
-        .eq('user_id', currentUserId)
-      : supabase
-        .from('likes')
-        .insert({ observation_id: observation.id, user_id: currentUserId })
+      ? supabase.from('likes').delete().eq('observation_id', observation.id).eq('user_id', currentUserId)
+      : supabase.from('likes').insert({ observation_id: observation.id, user_id: currentUserId })
 
     const { error } = await query
 
@@ -215,11 +215,7 @@ export default function Feed() {
     setActionLoading(true)
     const { error } = await supabase
       .from('comments')
-      .insert({
-        observation_id: observationId,
-        user_id: currentUserId,
-        content,
-      })
+      .insert({ observation_id: observationId, user_id: currentUserId, content })
 
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
@@ -247,59 +243,69 @@ export default function Feed() {
     setActionLoading(false)
   }
 
-  // --- PROCESSAMENTO DE FILTROS ---
+  // --- PROCESSAMENTO DE FILTROS INTELIGENTES ---
   let finalObservations = observations.filter(obs => {
-    const name = obs.species?.common_name_pt || obs.suggested_species || ''
-    return name.toLowerCase().includes(search.toLowerCase())
+    if (!search.trim()) return true
+    
+    const searchLower = search.toLowerCase()
+
+    // 1. Verificação Direta nos nomes básicos da observação
+    const commonName = obs.species?.common_name_pt?.toLowerCase() || ''
+    const scientificName = obs.species?.scientific_name?.toLowerCase() || ''
+    const suggested = obs.suggested_species?.toLowerCase() || ''
+    
+    if (commonName.includes(searchLower) || scientificName.includes(searchLower) || suggested.includes(searchLower)) {
+      return true
+    }
+
+    // 2. Pesquisa profunda em qualquer ramo taxonómico recorrendo à tua função SQL
+    if (obs.species_id && taxonomy.length > 0) {
+      const taxMatch = taxonomy.find(t => t.species_id === obs.species_id)
+      if (taxMatch) {
+        return (
+          (taxMatch.phylum_name && taxMatch.phylum_name.toLowerCase().includes(searchLower)) ||
+          (taxMatch.class_name && taxMatch.class_name.toLowerCase().includes(searchLower)) ||
+          (taxMatch.order_name && taxMatch.order_name.toLowerCase().includes(searchLower)) ||
+          (taxMatch.family_name && taxMatch.family_name.toLowerCase().includes(searchLower)) ||
+          (taxMatch.genus_name && taxMatch.genus_name.toLowerCase().includes(searchLower))
+        )
+      }
+    }
+
+    return false
   })
 
   // 1. Filtro por Período de Tempo
   if (dateFilter === 'today') {
     const hojeInicio = new Date()
     hojeInicio.setHours(0, 0, 0, 0)
-    finalObservations = finalObservations.filter(
-      obs => new Date(obs.observed_at) >= hojeInicio
-    )
+    finalObservations = finalObservations.filter(obs => new Date(obs.observed_at) >= hojeInicio)
   } else if (dateFilter === 'week') {
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
-    finalObservations = finalObservations.filter(
-      obs => new Date(obs.observed_at) >= weekAgo
-    )
+    finalObservations = finalObservations.filter(obs => new Date(obs.observed_at) >= weekAgo)
   } else if (dateFilter === 'month') {
     const monthAgo = new Date()
     monthAgo.setMonth(monthAgo.getMonth() - 1)
-    finalObservations = finalObservations.filter(
-      obs => new Date(obs.observed_at) >= monthAgo
-    )
+    finalObservations = finalObservations.filter(obs => new Date(obs.observed_at) >= monthAgo)
   }
 
-  // 2. Filtro de Ordenação / Estado Especial
+  // 2. Filtro de Ordenação
   if (sortBy === 'recent_view') {
     const duasHorasAtras = Date.now() - 2 * 60 * 60 * 1000
-
-    // Filtra apenas os IDs clicados nas últimas 2 horas
     const validClickedItems = recentViews.filter(item => item.viewedAt >= duasHorasAtras)
     const validClickedIds = validClickedItems.map(item => item.id)
 
-    // Filtra a lista principal para ter apenas as observações correspondentes
     finalObservations = finalObservations.filter(obs => validClickedIds.includes(obs.id))
-
-    // Ordena pela ordem em que foram clicadas (a mais recente primeiro)
     finalObservations.sort((a, b) => {
       const infoA = validClickedItems.find(item => item.id === a.id)
       const infoB = validClickedItems.find(item => item.id === b.id)
       return (infoB?.viewedAt || 0) - (infoA?.viewedAt || 0)
     })
   } else if (sortBy === 'popular') {
-    finalObservations.sort(
-      (a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)
-    )
+    finalObservations.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
   } else {
-    // 'all' ou padrão: ordena por data de observação mais recente
-    finalObservations.sort(
-      (a, b) => new Date(b.observed_at) - new Date(a.observed_at)
-    )
+    finalObservations.sort((a, b) => new Date(b.observed_at) - new Date(a.observed_at))
   }
 
   function handleApplyFilters() {
@@ -411,11 +417,7 @@ export default function Feed() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Image
-          source={require('../../assets/logoFeed.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <Image source={require('../../assets/logoFeed.png')} style={styles.logo} resizeMode="contain" />
         <TouchableOpacity onPress={() => router.push('/notifications')} style={{ position: 'relative' }}>
           <Ionicons name="notifications-outline" size={24} color="#1a3c2e" />
           {unreadCount > 0 && (
@@ -427,7 +429,7 @@ export default function Feed() {
       </View>
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={18} color="#999" style={{ marginRight: 8 }} />
-        <TextInput style={styles.searchInput} placeholder="Pesquisar espécies ou local..." value={search} onChangeText={setSearch} placeholderTextColor="#999" />
+        <TextInput style={styles.searchInput} placeholder="Pesquisar espécies, famílias, ordens..." value={search} onChangeText={setSearch} placeholderTextColor="#999" />
       </View>
       <View style={styles.filtersRow}>
         <View style={styles.filters}>
@@ -444,10 +446,7 @@ export default function Feed() {
           ))}
         </View>
 
-        <TouchableOpacity
-          style={styles.extraFilterBtn}
-          onPress={() => setShowFilters(true)}
-        >
+        <TouchableOpacity style={styles.extraFilterBtn} onPress={() => setShowFilters(true)}>
           <Ionicons name="options-outline" size={20} color="#1a3c2e" />
         </TouchableOpacity>
       </View>
@@ -467,60 +466,57 @@ export default function Feed() {
       </TouchableOpacity>
 
       {showFilters && (
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowFilters(false)}
-        >
-          <View style={styles.filterModal}>
-            <Text style={styles.filterModalTitle}>Filtros adicionais</Text>
-            
-            <Text style={styles.filterModalSection}>Mostrar / Ordenar</Text>
-            <View style={styles.filterModalRow}>
-              {[
-                { key: 'all', label: 'Todas' },
-                { key: 'recent_view', label: 'Visto recentemente' },
-                { key: 'popular', label: 'Mais populares' },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.filterModalBtn, (tempSortBy === opt.key) && styles.filterModalBtnActive]}
-                  onPress={() => setTempSortBy(opt.key)}
-                >
-                  <Text style={[styles.filterModalBtnText, (tempSortBy === opt.key) && styles.filterModalBtnTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowFilters(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
+            <ScrollView style={styles.filterModal} contentContainerStyle={{ paddingBottom: 40 }}>
+              <Text style={styles.filterModalTitle}>Filtros adicionais</Text>
 
-            <Text style={styles.filterModalSection}>Período</Text>
-            <View style={styles.filterModalRow}>
-              {[
-                { key: 'today', label: 'Hoje' },
-                { key: 'week', label: 'Última semana' },
-                { key: 'month', label: 'Último mês' },
-                { key: null, label: 'Sempre' },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={String(opt.key)}
-                  style={[styles.filterModalBtn, tempDateFilter === opt.key && styles.filterModalBtnActive]}
-                  onPress={() => setTempDateFilter(opt.key)}
-                >
-                  <Text style={[styles.filterModalBtnText, tempDateFilter === opt.key && styles.filterModalBtnTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {/* Mostrar / Ordenar */}
+              <Text style={styles.filterModalSection}>Mostrar / Ordenar</Text>
+              <View style={styles.filterModalRow}>
+                {[
+                  { key: 'all', label: 'Todas' },
+                  { key: 'recent_view', label: 'Visto recentemente' },
+                  { key: 'popular', label: 'Mais populares' },
+                ].map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.filterModalBtn, tempSortBy === opt.key && styles.filterModalBtnActive]}
+                    onPress={() => setTempSortBy(opt.key)}
+                  >
+                    <Text style={[styles.filterModalBtnText, tempSortBy === opt.key && styles.filterModalBtnTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            <TouchableOpacity 
-              style={styles.filterModalApply} 
-              onPress={handleApplyFilters}
-            >
-              <Text style={styles.filterModalApplyText}>Aplicar</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Período */}
+              <Text style={styles.filterModalSection}>Período</Text>
+              <View style={styles.filterModalRow}>
+                {[
+                  { key: 'today', label: 'Hoje' },
+                  { key: 'week', label: 'Última semana' },
+                  { key: 'month', label: 'Último mês' },
+                  { key: null, label: 'Sempre' },
+                ].map(opt => (
+                  <TouchableOpacity
+                    key={String(opt.key)}
+                    style={[styles.filterModalBtn, tempDateFilter === opt.key && styles.filterModalBtnActive]}
+                    onPress={() => setTempDateFilter(opt.key)}
+                  >
+                    <Text style={[styles.filterModalBtnText, tempDateFilter === opt.key && styles.filterModalBtnTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity style={styles.filterModalApply} onPress={handleApplyFilters}>
+                <Text style={styles.filterModalApplyText}>Aplicar filtros</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
       )}
 

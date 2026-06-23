@@ -28,7 +28,13 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permite ao BioRegisto aceder à tua localização para mostrar as observações no mapa."
+        }
+      ]
     ],
     "scheme": "bioregisto",
     "extra": {

@@ -21,7 +21,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "bio.registo"
+      "package": "bio.registo",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDJHvS4UwfLSEKN21C2hIqiqOwPKzf0NnE"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",

@@ -40,24 +40,34 @@ export default function ObservationDetail() {
   const [suggestedSpecies, setSuggestedSpecies] = useState('')
   const [isPublic, setIsPublic] = useState(true)
 
+  // Novo estado para o texto do comentário que está a ser escrito
+  const [newCommentText, setNewCommentText] = useState('')
+
   // Estado para controlar as configurações do Alerta Customizado
   const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', buttons: [] })
 
-  useEffect(() => { fetchObservation() }, [id])
+  useEffect(() => { 
+    if (id) {
+      fetchObservation() 
+    }
+  }, [id])
 
   async function fetchObservation() {
     setLoading(true)
 
+    // Forçar id limpo caso venha como Array pelo Expo Router
+    const cleanId = Array.isArray(id) ? id[0] : id
+
     const { data: obs } = await supabase
       .from('observations_with_coords')
       .select('*')
-      .eq('id', id)
+      .eq('id', cleanId)
       .single()
 
     const { data: photosData } = await supabase
       .from('photos')
       .select('*')
-      .eq('observation_id', id)
+      .eq('observation_id', cleanId)
       .order('order_index')
 
     if (obs?.species_id) {
@@ -99,7 +109,7 @@ export default function ObservationDetail() {
       const { data: auditData } = await supabase
         .from('observation_audit')
         .select('action, created_at, rejection_reason, user_id')
-        .eq('observation_id', id)
+        .eq('observation_id', cleanId)
         .in('action', ['VALIDATED', 'REJECTED'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -119,18 +129,62 @@ export default function ObservationDetail() {
     const { data: commentsData } = await supabase
       .from('comments')
       .select('id, content, created_at, user:user_id (username, avatar_url, full_name)')
-      .eq('observation_id', id)
+      .eq('observation_id', cleanId)
       .order('created_at', { ascending: true })
 
     const { data: likesData } = await supabase
       .from('likes')
       .select('created_at, user:user_id (username, avatar_url, full_name)')
-      .eq('observation_id', id)
+      .eq('observation_id', cleanId)
       .order('created_at', { ascending: false })
 
     if (commentsData) setComments(commentsData)
     if (likesData) setLikes(likesData)
     setLoading(false)
+  }
+
+  // Função para submeter um novo comentário
+  async function handleSendComment() {
+    if (!newCommentText.trim()) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setAlertConfig({
+          visible: true,
+          title: 'Aviso',
+          message: 'Inicia sessão para comentar.',
+          buttons: [{ text: 'OK' }]
+        })
+        return
+      }
+
+      const cleanId = Array.isArray(id) ? id[0] : id
+
+      const { error } = await supabase
+        .from('comments')
+        .insert([
+          {
+            observation_id: cleanId,
+            user_id: user.id,
+            content: newCommentText.trim()
+          }
+        ])
+
+      if (error) throw error
+
+      setNewCommentText('')
+      // Recarrega os dados para mostrar o comentário inserido instantaneamente
+      fetchObservation()
+    } catch (err) {
+      console.error('Erro ao enviar comentário:', err)
+      setAlertConfig({
+        visible: true,
+        title: 'Erro',
+        message: 'Não foi possível enviar o comentário.',
+        buttons: [{ text: 'OK' }]
+      })
+    }
   }
 
   async function pickFromGallery() {
@@ -156,7 +210,8 @@ export default function ObservationDetail() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       const ext = uri.split('.').pop().toLowerCase().split('?')[0]
-      const path = `${user.id}/${id}/${Date.now()}.${ext}`
+      const cleanId = Array.isArray(id) ? id[0] : id
+      const path = `${user.id}/${cleanId}/${Date.now()}.${ext}`
       
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' })
       const byteCharacters = atob(base64)
@@ -170,14 +225,14 @@ export default function ObservationDetail() {
       const { data: { publicUrl } } = supabase.storage.from('fotosEspecie').getPublicUrl(path)
       
       await supabase.from('photos').insert({ 
-        observation_id: id, 
+        observation_id: cleanId, 
         storage_path: path, 
         url: publicUrl, 
         is_primary: photos.length === 0, 
         order_index: photos.length 
       })
       
-      const { data: newPhotos } = await supabase.from('photos').select('*').eq('observation_id', id).order('order_index')
+      const { data: newPhotos } = await supabase.from('photos').select('*').eq('observation_id', cleanId).order('order_index')
       if (newPhotos) {
         setPhotos(newPhotos)
         setActivePhoto(newPhotos.length - 1)
@@ -219,10 +274,11 @@ export default function ObservationDetail() {
 
               if (dbError) throw dbError
 
+              const cleanId = Array.isArray(id) ? id[0] : id
               const { data: remainingPhotos } = await supabase
                 .from('photos')
                 .select('*')
-                .eq('observation_id', id)
+                .eq('observation_id', cleanId)
                 .order('order_index')
                 
               let updatedPhotos = remainingPhotos || []
@@ -291,6 +347,7 @@ export default function ObservationDetail() {
 
     setSaving(true)
     const nextStatus = observation.status === 'REJECTED' ? 'PENDING' : observation.status
+    const cleanId = Array.isArray(id) ? id[0] : id
 
     const { error } = await supabase
       .from('observations')
@@ -301,7 +358,7 @@ export default function ObservationDetail() {
         status: nextStatus,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id)
+      .eq('id', cleanId)
 
     if (error) {
       setAlertConfig({
@@ -338,23 +395,25 @@ export default function ObservationDetail() {
           onPress: async () => {
             setSaving(true)
             try {
+              const cleanId = Array.isArray(id) ? id[0] : id
+
               await supabase
                 .from('observation_audit')
                 .delete()
-                .eq('observation_id', id)
+                .eq('observation_id', cleanId)
 
               for (const photo of photos) {
                 await supabase.storage.from('fotosEspecie').remove([photo.storage_path])
               }
-              await supabase.from('photos').delete().eq('observation_id', id)
+              await supabase.from('photos').delete().eq('observation_id', cleanId)
 
-              await supabase.from('likes').delete().eq('observation_id', id)
-              await supabase.from('comments').delete().eq('observation_id', id)
+              await supabase.from('likes').delete().eq('observation_id', cleanId)
+              await supabase.from('comments').delete().eq('observation_id', cleanId)
 
               const { error } = await supabase
                 .from('observations')
                 .delete()
-                .eq('id', id)
+                .eq('id', cleanId)
 
               if (error) throw error
 
@@ -381,9 +440,6 @@ export default function ObservationDetail() {
 
   if (loading) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
   if (!observation) return <ActivityIndicator size="large" color="#1a3c2e" style={{ flex: 1 }} />
-
-  console.log('audit:', JSON.stringify(audit))
-  console.log('observation status:', observation?.status)
 
   const status = STATUS_CONFIG[observation.status] || STATUS_CONFIG.PENDING
   const canEdit = observation.status === 'PENDING' || observation.status === 'REJECTED'
@@ -585,7 +641,7 @@ export default function ObservationDetail() {
 
         {/* Likes */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Gostos</Text>
+          <Text style={styles.sectionLabel}>Gostos ({likes.length})</Text>
           {likes.length === 0 ? (
             <Text style={styles.noValue}>Ainda sem likes</Text>
           ) : (
@@ -593,15 +649,61 @@ export default function ObservationDetail() {
               {likes.map((like, index) => (
                 <View key={like.user?.id || index} style={styles.likeAvatar}>
                   {like.user?.avatar_url ? (
-                    <Image source={{ uri: like.user.avatar_url }} style={styles.likeAvatarImage} />
+                  <Image source={{ uri: like.user.avatar_url }} style={styles.likeAvatarImage} />
                   ) : (
-                    <Ionicons name="heart" size={12} color="#fff" />
+                    <Text style={styles.likeInitialText}>
+                      {like.user?.username?.charAt(0).toUpperCase() || 'U'}
+                    </Text>
                   )}
                 </View>
               ))}
             </View>
           )}
         </View>
+
+        {/* ====== NOVA SECÇÃO DE COMENTÁRIOS ADICIONADA ====== */}
+        {!editing && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Comentários ({comments.length})</Text>
+            
+            {/* Lista dos Comentários existentes */}
+            {comments.length === 0 ? (
+              <Text style={[styles.noValue, { marginBottom: 10 }]}>Nenhum comentário ainda. Sê o primeiro!</Text>
+            ) : (
+              comments.map((item) => (
+                <View key={item.id} style={styles.commentRow}>
+                  <View style={styles.commentAvatar}>
+                    {item.user?.avatar_url ? (
+                      <Image source={{ uri: item.user.avatar_url }} style={{ width: '100%', height: '100%', borderRadius: 14 }} />
+                    ) : (
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>
+                        {item.user?.username?.charAt(0).toUpperCase() || 'U'}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.commentBubble}>
+                    <Text style={styles.commentUser}>@{item.user?.username || 'utilizador'}</Text>
+                    <Text style={styles.commentText}>{item.content}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+
+            {/* Input de escrita para Novo Comentário */}
+            <View style={styles.commentInputBox}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Escreve um comentário..."
+                placeholderTextColor="#aaa"
+                value={newCommentText}
+                onChangeText={setNewCommentText}
+              />
+              <TouchableOpacity onPress={handleSendComment} style={styles.commentSendBtn}>
+                <Ionicons name="send" size={14} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Botões de Ação */}
         {canEdit && (
@@ -679,8 +781,9 @@ const styles = StyleSheet.create({
   miniMap: { height: 140, borderRadius: 10, marginBottom: 8 },
   coordsText: { fontSize: 12, color: '#888' },
   likesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  likeAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  likeAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   likeAvatarImage: { width: '100%', height: '100%' },
+  likeInitialText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   validatedBy: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   validatedAvatar: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   validatedText: { fontSize: 13, color: '#555' },
@@ -692,4 +795,14 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: '#555', fontSize: 15 },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#dc2626', borderRadius: 10, padding: 14 },
   deleteBtnText: { color: '#dc2626', fontWeight: '600', fontSize: 15 },
+
+  // Estilos dedicados da nova secção de comentários
+  commentRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
+  commentAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1a3c2e', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  commentBubble: { flex: 1, backgroundColor: '#f4f6f4', padding: 10, borderRadius: 12 },
+  commentUser: { fontSize: 12, fontWeight: 'bold', color: '#1a3c2e', marginBottom: 2 },
+  commentText: { fontSize: 13, color: '#333', lineHeight: 18 },
+  commentInputBox: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  commentInput: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, color: '#333', backgroundColor: '#fff' },
+  commentSendBtn: { backgroundColor: '#1a3c2e', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' }
 })

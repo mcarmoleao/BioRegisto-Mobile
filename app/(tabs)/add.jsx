@@ -70,7 +70,7 @@ export default function Add() {
     }
   }
 
-  // Menu de escolha de método de localização (Utiliza o teu CustomAlert adaptado!)
+  // Menu de escolha de método de localização
   function handleLocationPress() {
     setAlertConfig({
       visible: true,
@@ -195,14 +195,17 @@ export default function Add() {
   }
 
   async function handleSubmit() {
-    if (!description.trim()) {
+    // 1. Validação Obrigatória: Fotografias
+    if (photos.length === 0) {
       setAlertConfig({
         visible: true,
         title: "Erro de validação",
-        message: "A descrição é obrigatória."
+        message: "Precisas de adicionar pelo menos 1 fotografia para a observação."
       });
       return;
     }
+
+    // 2. Validação Obrigatória: Localização
     if (!location) {
       setAlertConfig({
         visible: true,
@@ -220,7 +223,7 @@ export default function Add() {
         .from("observations")
         .insert({
           user_id: user.id,
-          description: description.trim(),
+          description: description.trim() || null, // Se estiver vazia, guarda NULL na BD
           suggested_species: suggestedSpecies.trim() || null,
           location: `POINT(${location.longitude} ${location.latitude})`,
           observed_at: new Date().toISOString(),
@@ -318,8 +321,8 @@ export default function Add() {
 
         {/* Descrição */}
         <View style={styles.section}>
-          <Text style={styles.label}>Descrição</Text>
-          <TextInput style={[styles.input, styles.textArea]} placeholder="Descreve o que observaste..." value={description} onChangeText={setDescription} multiline numberOfLines={4} placeholderTextColor="#999" />
+          <Text style={styles.label}>Descrição <Text style={styles.optional}>(opcional)</Text></Text>
+          <TextInput style={[styles.input, styles.textArea]} placeholder="Descreve o que observaste (opcional)..." value={description} onChangeText={setDescription} multiline numberOfLines={4} placeholderTextColor="#999" />
         </View>
 
         {/* Localização Dinâmica */}
